@@ -453,6 +453,51 @@ func TestPyPIHandler_DownloadUpstreamURL(t *testing.T) {
 	}
 }
 
+// TestPyPIHandler_CustomDownloadUpstreamURL covers a registry manager such as
+// Sonatype Firewall standing in for files.pythonhosted.org: with pypi_download
+// pointing at it, artifacts are fetched through it, so its policy applies to
+// downloads too and not only to metadata.
+func TestPyPIHandler_CustomDownloadUpstreamURL(t *testing.T) {
+	proxy, _, _, fetcher := setupTestProxy(t)
+	fetcher.artifact = &fetch.Artifact{
+		Body:        io.NopCloser(strings.NewReader("wheel data")),
+		ContentType: "application/octet-stream",
+	}
+
+	const firewall = "https://firewall.sonatype.app/pypi/"
+	h := NewPyPIHandlerWithUpstreams(proxy, "http://localhost", firewall, firewall)
+	srv := httptest.NewServer(h.Routes())
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/packages/packages/ab/cd/ef0123456789/python_policy_demo-1.1.0-py3-none-any.whl")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	want := "https://firewall.sonatype.app/pypi/packages/ab/cd/ef0123456789/python_policy_demo-1.1.0-py3-none-any.whl"
+	if fetcher.fetchedURL != want {
+		t.Errorf("upstream URL = %q, want %q", fetcher.fetchedURL, want)
+	}
+}
+
+// TestPyPIHandler_CustomDownloadHostRewritesLinks covers the simple index of a
+// registry manager, whose file links sit under its own base rather than under
+// files.pythonhosted.org. They must still be rewritten to this proxy, otherwise
+// the client downloads around the proxy and around its policy.
+func TestPyPIHandler_CustomDownloadHostRewritesLinks(t *testing.T) {
+	const firewall = "https://firewall.sonatype.app/pypi/"
+	h := NewPyPIHandlerWithUpstreams(&Proxy{Logger: slog.Default()}, "http://localhost", firewall, firewall)
+
+	body := []byte(`<a href="https://firewall.sonatype.app/pypi/packages/ab/cd/file.whl#sha256=123">file.whl</a>`)
+	rewritten := h.rewriteSimpleHTML(body, nil)
+
+	want := `href="http://localhost/pypi/packages/packages/ab/cd/file.whl#sha256=123"`
+	if !strings.Contains(string(rewritten), want) {
+		t.Errorf("rewritten index = %s, want it to contain %s", rewritten, want)
+	}
+}
+
 func TestPyPIHandler_DownloadCacheHit(t *testing.T) {
 	proxy, db, store, _ := setupTestProxy(t)
 	seedPackage(t, db, store, "pypi", "requests", "2.31.0",
