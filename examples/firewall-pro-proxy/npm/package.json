@@ -1,0 +1,11 @@
+{
+  "name": "fwpro-proxy-npm-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal npm project for demonstrating Sonatype Firewall Pro through git-pkgs proxy.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "install:allowed": "npm_config_registry=https://proxy.wn.leyux.de/npm/ npm install @sonatype/policy-demo@2.0.0",
+    "install:blocked": "npm_config_registry=https://proxy.wn.leyux.de/npm/ npm install @sonatype/policy-demo@2.1.0"
+  }
+}
