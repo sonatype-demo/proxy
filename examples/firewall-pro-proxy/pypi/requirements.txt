@@ -1,0 +1,2 @@
+# Normal package for proving the PyPI proxy route without intentionally triggering Firewall Pro.
+requests==2.28.2
