@@ -14,6 +14,7 @@ The proxy upstreams are configured for Sonatype Firewall Pro:
 | --- | --- | --- | --- |
 | npm | `https://proxy.wn.leyux.de/npm/` | `https://firewall.sonatype.app/npm/` | malicious sample blocking works |
 | PyPI | `https://proxy.wn.leyux.de/pypi/simple/` | `https://firewall.sonatype.app/pypi/` | malicious sample blocking works |
+| Maven | `https://proxy.wn.leyux.de/maven/` | `https://firewall.sonatype.app/mvn/` | traffic routes through Firewall Pro; malicious sample blocking not currently observed |
 
 Before a live demo, clear or isolate the package-manager cache so local artifacts do not hide whether the proxy/Firewall path is being used.
 
@@ -115,3 +116,63 @@ https://firewall.sonatype.app/pypi/packages/
 ```
 
 If logs show `https://files.pythonhosted.org/` for a fresh cache miss, the PyPI route is bypassing Firewall Pro and the demo should be paused.
+
+
+## Maven demo
+
+Example files live in:
+
+```text
+examples/firewall-pro-proxy/maven/
+```
+
+The Maven demo uses an isolated local repository and command-line repository override so it does not depend on any user-level Maven settings.
+
+### Clean local Maven state
+
+```bash
+cd examples/firewall-pro-proxy/maven
+rm -rf /tmp/fwpro-proxy-maven-repo
+mkdir -p /tmp/fwpro-proxy-maven-repo
+```
+
+### Pull the allowed Sonatype sample through the proxy
+
+```bash
+mvn -q   -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo   -DremoteRepositories=firewall-pro-proxy::default::https://proxy.wn.leyux.de/maven/   -Dartifact=org.sonatype:maven-policy-demo:1.0.0:pom   dependency:get
+```
+
+Expected result: Maven exits successfully and writes the POM under `/tmp/fwpro-proxy-maven-repo/org/sonatype/maven-policy-demo/1.0.0/`.
+
+### Try the non-normal Sonatype sample through the proxy
+
+```bash
+mvn -q   -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo   -DremoteRepositories=firewall-pro-proxy::default::https://proxy.wn.leyux.de/maven/   -Dartifact=org.sonatype:maven-policy-demo:1.1.0:pom   dependency:get
+```
+
+Current verified behavior: Maven traffic is routed through Firewall Pro, but `org.sonatype:maven-policy-demo:1.1.0:pom` still resolves/downloads. Therefore this Maven procedure demonstrates Firewall Pro as the upstream registry/cache path, but it must not be presented as proof that malicious Maven packages are blocked today.
+
+Known Sonatype Maven sample versions:
+
+- `1.0.0` - Normal
+- `1.1.0` - Suspicious; malicious Security Vulnerability Category
+- `1.2.0` - Suspicious
+- `1.3.0` - Pending
+
+### Optional: use the sample pom.xml
+
+The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and depends on the allowed sample version:
+
+```bash
+mvn -q -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo dependency:resolve
+```
+
+### Presenter signal
+
+After a fresh request, proxy logs on docker-wn should show Maven upstream URLs under:
+
+```text
+https://firewall.sonatype.app/mvn/
+```
+
+If logs show `https://repo1.maven.org/maven2/` for a fresh cache miss, the Maven route is bypassing Firewall Pro and the demo should be paused.

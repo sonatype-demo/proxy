@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.sonatype.demo</groupId>
+  <artifactId>fwpro-proxy-maven-demo</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+
+  <repositories>
+    <repository>
+      <id>firewall-pro-proxy</id>
+      <url>https://proxy.wn.leyux.de/maven/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.sonatype</groupId>
+      <artifactId>maven-policy-demo</artifactId>
+      <version>1.0.0</version>
+      <type>pom</type>
+    </dependency>
+  </dependencies>
+</project>
