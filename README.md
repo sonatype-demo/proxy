@@ -1,5 +1,17 @@
 # git-pkgs proxy
 
+> **Modified fork — Sonatype Firewall Pro demo.** This is a fork of
+> [git-pkgs/proxy](https://github.com/git-pkgs/proxy) adapted to front **Sonatype Repository
+> Firewall Pro** and demonstrate malicious-package blocking for npm, PyPI and Maven. Start here:
+>
+> - **[SONATYPE-DEMO-FWPRO-PROXY.md](SONATYPE-DEMO-FWPRO-PROXY.md)** — purpose, architecture,
+>   what this fork changed and why, and how to run the demo.
+> - **[examples/firewall-pro-proxy/](examples/firewall-pro-proxy/README.md)** — ready-to-run
+>   per-ecosystem example projects (npm, PyPI, Maven), the verification script, and a local
+>   proxy container for Rancher Desktop.
+>
+> Everything below is the upstream project's documentation.
+
 A caching proxy for package registries. Speeds up package downloads by caching artifacts locally, reducing bandwidth usage and improving reliability.
 
 ## Version Cooldown
