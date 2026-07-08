@@ -6,7 +6,7 @@
 Maven, and many more). Upstream, it points each ecosystem at its public registry
 (registry.npmjs.org, PyPI, Maven Central, …).
 
-**This fork repoints the npm, PyPI and Maven upstreams at [Sonatype Repository
+**This fork repoints the npm, PyPI, Maven and NuGet upstreams at [Sonatype Repository
 Firewall](https://www.sonatype.com/products/sonatype-repository-firewall) ("Firewall
 Pro") instead.** Firewall Pro evaluates every requested component against Sonatype
 policy and **quarantines malicious or non-compliant versions**. Placing the proxy in
@@ -16,7 +16,7 @@ while every download is transparently screened by Firewall Pro.
 The demo shows, live, that:
 
 - **known-good** package versions install normally through the proxy, and
-- **known-malicious** sample versions are **blocked** — for all three ecosystems.
+- **known-malicious** sample versions are **blocked** — for all four ecosystems.
 
 ```
   npm / pip / mvn                git-pkgs proxy                 Sonatype Firewall Pro
@@ -64,6 +64,7 @@ environment before running those.
 | npm       | `$PROXY_URL/npm/`                     | `https://firewall.sonatype.app/npm/`   |
 | PyPI      | `$PROXY_URL/pypi/simple/`             | `https://firewall.sonatype.app/pypi/`  |
 | Maven     | `$PROXY_URL/maven/`                   | `https://firewall.sonatype.app/mvn/`   |
+| NuGet     | `$PROXY_URL/nuget/v3/index.json`      | `https://firewall.sonatype.app/nuget/` |
 
 ## The sample packages
 
@@ -76,6 +77,7 @@ non-normal/malicious.
 | npm       | `@sonatype/policy-demo`          | `2.0.0` | `2.1.0`, `2.2.0`, `2.3.0` |
 | PyPI      | `python-policy-demo`             | `1.0.0` | `1.1.0`, `1.2.0`, `1.3.0` |
 | Maven     | `org.sonatype:maven-policy-demo` | `1.0.0` | `1.1.0`, `1.2.0`, `1.3.0` |
+| NuGet     | `Sonatype.sonatype-policy-demo.Package` | `1.0.0` | `1.1.0`, `1.2.0`, `1.3.0` |
 
 ## How a block appears at the HTTP level
 
@@ -87,6 +89,7 @@ demoing it correctly:
 | npm       | The malicious **tarball** returns `403`; the version is also hidden from the packument | `npm install` fails to fetch the tarball    |
 | PyPI      | The malicious version is **omitted from the PEP 503 simple index** (no download link) | pip: `No matching distribution found`       |
 | Maven     | The **JAR** (component binary) returns `403`; the **POM is always served (200)** | `mvn` fails to transfer the artifact        |
+| NuGet     | The malicious **`.nupkg`** returns `409 Conflict` (all versions stay listed in the index) | `dotnet`/`nuget` restore fails on the package |
 
 The Maven distinction is the easy one to get wrong: the POM is only metadata and is never
 quarantined, so a `:pom` request can never demonstrate a block. **Always demo Maven with
@@ -98,11 +101,14 @@ The proxy needed both configuration and source changes to front Firewall Pro cor
 
 ### 1. Repoint the upstreams at Firewall Pro (enablement)
 
-The stock proxy hard-codes public registries. This fork lets the npm and PyPI upstreams be
-configured and rewrites Firewall's artifact links back through the proxy
-(`ea25a6b`, `73e035c`), and the deployment config sets `upstream.npm/pypi/maven` to the
-Firewall Pro endpoints with basic-auth. Result: every fresh request is screened by
-Firewall Pro rather than the public registry.
+The stock proxy hard-codes public registries. This fork lets the npm, PyPI and NuGet
+upstreams be configured and rewrites Firewall's artifact/service links back through the
+proxy (`ea25a6b`, `73e035c`, plus the NuGet patch), and the deployment config sets
+`upstream.npm/pypi/maven/nuget` to the Firewall Pro endpoints with basic-auth. Result: every
+fresh request is screened by Firewall Pro rather than the public registry. (For NuGet the
+handler also applies the upstream auth to its direct service-index/registration/search
+calls and drops the repository-signatures resource so `dotnet` doesn't require repo-signed
+packages.)
 
 ### 2. Demo the Maven block on the JAR, not the POM
 
@@ -111,11 +117,12 @@ was not observed." The runbook and sample `pom.xml` now use the **JAR**, which i
 artifact Firewall actually quarantines. (Root-caused with direct-to-Firewall probes; see
 the Maven README.)
 
-### 3. Forward Firewall's `403` to the client, consistently (`27498bd`, `762ff95`)
+### 3. Forward Firewall's `403`/`409` to the client, consistently (`27498bd`, `762ff95`)
 
-When Firewall quarantines a component it returns `403` with a JSON *Sonatype Firewall
-Report* body. The stock proxy mapped that to a generic **`502 Bad Gateway`**, hiding the
-reason. Now the proxy **forwards the `403` and the report body** to the client. A shared
+When Firewall quarantines a component it returns `403` (npm/Maven/PyPI, JSON *Sonatype
+Firewall Report* body) or `409` (NuGet, plain-text block message). The stock proxy mapped
+that to a generic **`502 Bad Gateway`**, hiding the reason. Now the proxy **forwards the
+`403`/`409` and the report body** to the client. A shared
 helper (`serveUpstreamBlock` / `writeArtifactError` in `internal/handler/handler.go`) is
 adopted by **every** ecosystem download handler — so blocking behaves the same whether you
 pull npm, Maven, or any other ecosystem — with npm keeping its JSON error shape and the OCI
@@ -126,7 +133,7 @@ Forbidden (403)` instead of `502`.
 
 The proxy's upstream fetcher has a per-host circuit breaker. The stock breaker counts
 **every** non-2xx as a failure — including a `403` policy block — and because one host
-(`firewall.sonatype.app`) fronts all three ecosystems, they share one breaker. Blocking a
+(`firewall.sonatype.app`) fronts all four ecosystems, they share one breaker. Blocking a
 handful of malicious packages in a row would open it after 5 failures and then **healthy,
 allowed packages would start failing with `502`** for the backoff window.
 
@@ -148,6 +155,7 @@ Per-ecosystem, hands-on runbooks live next to the example projects:
 - **npm** — [`examples/firewall-pro-proxy/npm/README.md`](examples/firewall-pro-proxy/npm/README.md)
 - **PyPI** — [`examples/firewall-pro-proxy/pypi/README.md`](examples/firewall-pro-proxy/pypi/README.md)
 - **Maven** — [`examples/firewall-pro-proxy/maven/README.md`](examples/firewall-pro-proxy/maven/README.md)
+- **NuGet** — [`examples/firewall-pro-proxy/nuget/README.md`](examples/firewall-pro-proxy/nuget/README.md)
 
 Overview and shared setup: [`examples/firewall-pro-proxy/README.md`](examples/firewall-pro-proxy/README.md).
 
@@ -178,6 +186,7 @@ FIREWALL_BASE=$PROXY_URL \
 NPM_UPSTREAM=$PROXY_URL/npm \
 PYPI_UPSTREAM=$PROXY_URL/pypi \
 MAVEN_UPSTREAM=$PROXY_URL/maven \
+NUGET_UPSTREAM=$PROXY_URL/nuget \
 ./verify-firewall-blocking.sh
 ```
 
@@ -193,7 +202,7 @@ docker-wn should show the Firewall upstream:
 
 ```bash
 docker logs --since 2m git-pkgs-proxy 2>&1 \
-  | grep -E 'firewall.sonatype.app|registry.npmjs.org|files.pythonhosted.org|repo1.maven.org'
+  | grep -E 'firewall.sonatype.app|registry.npmjs.org|files.pythonhosted.org|repo1.maven.org|api.nuget.org'
 ```
 
 | Ecosystem | Good (Firewall in path)                       | Bad (bypassing Firewall)              |
@@ -201,6 +210,7 @@ docker logs --since 2m git-pkgs-proxy 2>&1 \
 | npm       | `https://firewall.sonatype.app/npm/`          | `https://registry.npmjs.org/`         |
 | PyPI      | `https://firewall.sonatype.app/pypi/packages/`| `https://files.pythonhosted.org/`     |
 | Maven     | `https://firewall.sonatype.app/mvn/`          | `https://repo1.maven.org/maven2/`     |
+| NuGet     | `https://firewall.sonatype.app/nuget/`        | `https://api.nuget.org/`              |
 
 A confirmed block is logged as `artifact blocked by upstream policy` with the Firewall
 report `detail`. If you see a `registry.npmjs.org` / `files.pythonhosted.org` /

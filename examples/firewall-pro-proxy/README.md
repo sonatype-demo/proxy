@@ -47,8 +47,9 @@ cp .env.example .env      # then edit PROXY_URL and the Firewall creds
 | [`npm/`](npm/README.md)           | npm demo — `@sonatype/policy-demo`                               |
 | [`pypi/`](pypi/README.md)         | PyPI/pip demo — `python-policy-demo`                             |
 | [`maven/`](maven/README.md)       | Maven demo — `org.sonatype:maven-policy-demo` (+ Gradle notes)  |
+| [`nuget/`](nuget/README.md)       | NuGet demo — `Sonatype.sonatype-policy-demo.Package`            |
 | [`local-proxy/`](local-proxy/README.md) | Run your **own** proxy container locally (Rancher Desktop) at `localhost:8080` |
-| `verify-firewall-blocking.sh`     | One-shot check of the whole allowed/blocked matrix (all 3)       |
+| `verify-firewall-blocking.sh`     | One-shot check of the whole allowed/blocked matrix (all 4)       |
 
 ## The demo in one line per ecosystem
 
@@ -57,8 +58,9 @@ cp .env.example .env      # then edit PROXY_URL and the Firewall creds
 | npm       | `@sonatype/policy-demo@2.0.0`            | `@sonatype/policy-demo@2.1.0`            |
 | PyPI      | `python-policy-demo==1.0.0`              | `python-policy-demo==1.1.0`             |
 | Maven     | `org.sonatype:maven-policy-demo:1.0.0:jar` | `org.sonatype:maven-policy-demo:1.1.0:jar` |
+| NuGet     | `Sonatype.sonatype-policy-demo.Package` 1.0.0 | `Sonatype.sonatype-policy-demo.Package` 1.1.0 |
 
-## Automated verification (all three at once)
+## Automated verification (all four at once)
 
 `verify-firewall-blocking.sh` asserts that every malicious sample is blocked and every
 allowed sample is served. It downloads no package bytes and is safe to run in CI.
@@ -78,6 +80,7 @@ FIREWALL_BASE=$PROXY_URL \
 NPM_UPSTREAM=$PROXY_URL/npm \
 PYPI_UPSTREAM=$PROXY_URL/pypi \
 MAVEN_UPSTREAM=$PROXY_URL/maven \
+NUGET_UPSTREAM=$PROXY_URL/nuget \
 ./verify-firewall-blocking.sh
 ```
 

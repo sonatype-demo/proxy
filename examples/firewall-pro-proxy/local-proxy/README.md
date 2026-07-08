@@ -9,7 +9,7 @@ Files here:
 | File                 | Purpose                                                             |
 | -------------------- | ------------------------------------------------------------------ |
 | `docker-compose.yml` | Builds the proxy image from source and serves it on port 8080      |
-| `config.yml`         | Proxy config: npm/PyPI/Maven upstreams → Firewall Pro, SQLite + local storage |
+| `config.yml`         | Proxy config: npm/PyPI/Maven/NuGet upstreams → Firewall Pro, SQLite + local storage |
 
 The proxy screens packages through Firewall Pro, so you need **Firewall Pro basic-auth
 credentials** (same as the verify script). Without them, upstream auth fails and packages
@@ -72,7 +72,7 @@ one-shot verifier:
 cd ..                                       # examples/firewall-pro-proxy/
 set -a; . ./.env; set +a                    # loads PROXY_URL + Firewall creds
 NPM_UPSTREAM=$PROXY_URL/npm PYPI_UPSTREAM=$PROXY_URL/pypi \
-MAVEN_UPSTREAM=$PROXY_URL/maven FIREWALL_BASE=$PROXY_URL \
+MAVEN_UPSTREAM=$PROXY_URL/maven NUGET_UPSTREAM=$PROXY_URL/nuget FIREWALL_BASE=$PROXY_URL \
 ./verify-firewall-blocking.sh               # expect 12 passed, 0 failed
 ```
 
