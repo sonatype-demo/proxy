@@ -167,6 +167,24 @@ The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its reposi
 mvn -q -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo dependency:resolve
 ```
 
+### Gradle plugin resolution note
+
+The upstream `git-pkgs/proxy` README also documents Gradle plugin resolution through the Maven endpoint. A Gradle build should configure plugin repositories like this:
+
+```kotlin
+pluginManagement {
+  repositories {
+    maven(url = "https://proxy.wn.leyux.de/maven/")
+  }
+}
+```
+
+The example `settings.gradle.kts` in this directory contains that configuration.
+
+Current live check: this Gradle plugin-resolution path is not a working Firewall Pro demo yet. With `upstream.maven` set to `https://firewall.sonatype.app/mvn/`, a fresh request for a Gradle plugin marker POM such as `com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:8.4.0` returned `502` through the proxy. Logs showed the proxy tried `https://firewall.sonatype.app/mvn/...`; the direct Firewall response for that marker is `404`, while `https://plugins.gradle.org/m2/...` serves the marker. Do not present Gradle plugin resolution as verified until the Maven handler fallback/auth behavior is fixed or the Gradle Plugin Portal path is intentionally configured and tested.
+
+The README's separate `/gradle/` endpoint is Gradle HTTP Build Cache, not Maven dependency or plugin resolution. It is unrelated to the Firewall Pro package-blocking demo.
+
 ### Presenter signal
 
 After a fresh request, proxy logs on docker-wn should show Maven upstream URLs under:
