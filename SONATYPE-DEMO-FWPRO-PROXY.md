@@ -20,7 +20,7 @@ The demo shows, live, that:
 
 ```
   npm / pip / mvn                git-pkgs proxy                 Sonatype Firewall Pro
-  ────────────────>  https://proxy.wn.leyux.de/*  ──────>  https://firewall.sonatype.app/*
+  ────────────────>       $PROXY_URL/*         ──────>  https://firewall.sonatype.app/*
    (plain registry URL,          (caches allowed                (evaluates policy,
     no auth needed)               artifacts, forwards            quarantines malicious
                                   policy blocks)                 versions, holds creds)
@@ -31,15 +31,31 @@ The demo shows, live, that:
 The proxy runs as a Docker Compose service on `docker-wn` and is published at
 `https://proxy.wn.leyux.de/`. Deployment repo: `/home/cleygraf/git/wn-leyux-org/proxy`
 (see its README). The Firewall Pro basic-auth credentials are injected into the
-container from that repo's untracked `.env`. A gitignored copy of that `.env` also
-lives at `examples/firewall-pro-proxy/.env` so the verification script can be run
-self-contained (see below). Never commit or print these values.
+container from that repo's untracked `.env`. A gitignored copy of that `.env` — plus the
+non-secret `PROXY_URL` below — also lives at `examples/firewall-pro-proxy/.env` so the demo
+and verification script can be run self-contained (see below). Never commit or print the
+credential values.
 
-| Ecosystem | Proxy endpoint (what developers use)      | Firewall Pro upstream                  |
-| --------- | ----------------------------------------- | -------------------------------------- |
-| npm       | `https://proxy.wn.leyux.de/npm/`          | `https://firewall.sonatype.app/npm/`   |
-| PyPI      | `https://proxy.wn.leyux.de/pypi/simple/`  | `https://firewall.sonatype.app/pypi/`  |
-| Maven     | `https://proxy.wn.leyux.de/maven/`        | `https://firewall.sonatype.app/mvn/`   |
+### Point the demo at any proxy — `PROXY_URL`
+
+The demo `.env` defines a non-secret **`PROXY_URL`**: the base URL of the proxy the demo
+commands talk to (no trailing slash). It defaults to the docker-wn deployment:
+
+```bash
+PROXY_URL=https://proxy.wn.leyux.de
+```
+
+Set it to your own proxy to run the same demo elsewhere — for example a local proxy
+container: `PROXY_URL=http://localhost:8080`. Every command in this runbook and the
+per-ecosystem READMEs uses `$PROXY_URL`. Load it with `set -a; . ./.env; set +a` from
+`examples/firewall-pro-proxy/` (this also loads the Firewall creds for the verify script),
+or, for the through-proxy demos that need no credentials, just `export PROXY_URL=…`.
+
+| Ecosystem | Proxy endpoint (what developers use) | Firewall Pro upstream                  |
+| --------- | ------------------------------------ | -------------------------------------- |
+| npm       | `$PROXY_URL/npm/`                     | `https://firewall.sonatype.app/npm/`   |
+| PyPI      | `$PROXY_URL/pypi/simple/`             | `https://firewall.sonatype.app/pypi/`  |
+| Maven     | `$PROXY_URL/maven/`                   | `https://firewall.sonatype.app/mvn/`   |
 
 ## The sample packages
 
@@ -140,18 +156,20 @@ By default it talks **directly to Firewall Pro** (isolating Firewall/policy from
 
 ```bash
 cd examples/firewall-pro-proxy
-set -a; . ./.env; set +a   # load Firewall creds (gitignored local copy in this folder)
+set -a; . ./.env; set +a   # loads Firewall creds + PROXY_URL (gitignored local copy)
 ./verify-firewall-blocking.sh
 ```
 
 Point it **through the proxy** to verify the end-to-end path (this is what exercises the
-`403`-forwarding and breaker changes above):
+`403`-forwarding and breaker changes above). The upstreams are derived from `$PROXY_URL`, so
+this works against any proxy — the docker-wn default or your own `http://localhost:8080`:
 
 ```bash
-FIREWALL_BASE=https://proxy.wn.leyux.de \
-NPM_UPSTREAM=https://proxy.wn.leyux.de/npm \
-PYPI_UPSTREAM=https://proxy.wn.leyux.de/pypi \
-MAVEN_UPSTREAM=https://proxy.wn.leyux.de/maven \
+set -a; . ./.env; set +a   # loads Firewall creds + PROXY_URL
+FIREWALL_BASE=$PROXY_URL \
+NPM_UPSTREAM=$PROXY_URL/npm \
+PYPI_UPSTREAM=$PROXY_URL/pypi \
+MAVEN_UPSTREAM=$PROXY_URL/maven \
 ./verify-firewall-blocking.sh
 ```
 

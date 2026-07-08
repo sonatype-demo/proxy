@@ -3,12 +3,19 @@
 Shows Sonatype Firewall Pro blocking a malicious npm package while an allowed version
 installs normally, all through `git-pkgs proxy`.
 
-- **Registry (proxy):** `https://proxy.wn.leyux.de/npm/`  → upstream `https://firewall.sonatype.app/npm/`
+- **Registry (proxy):** `$PROXY_URL/npm/`  → upstream `https://firewall.sonatype.app/npm/`
 - **Package:** `@sonatype/policy-demo`
 - **Allowed:** `2.0.0`  **Blocked:** `2.1.0`, `2.2.0`, `2.3.0`
 
-`package.json` in this folder has `install:allowed` / `install:blocked` scripts that wrap the
-commands below; you can run them or the raw commands.
+Set the proxy URL first (default is the docker-wn deployment; use your own, e.g. a local
+container `http://localhost:8080`):
+
+```bash
+export PROXY_URL=https://proxy.wn.leyux.de     # or: set -a; . ../.env; set +a
+```
+
+The checked-in `package.json` has `install:allowed` / `install:blocked` scripts that target
+the default docker-wn proxy; the raw commands below honor `$PROXY_URL`.
 
 ## How the block works
 
@@ -30,7 +37,7 @@ rm -rf node_modules package-lock.json
 ## 2. Install an allowed package (succeeds)
 
 ```bash
-npm_config_registry=https://proxy.wn.leyux.de/npm/ npm install @sonatype/policy-demo@2.0.0
+npm_config_registry=$PROXY_URL/npm/ npm install @sonatype/policy-demo@2.0.0
 ```
 
 Expected: install succeeds. `2.0.0` is the normal, allowed sample.
@@ -38,7 +45,7 @@ Expected: install succeeds. `2.0.0` is the normal, allowed sample.
 ## 3. Install a malicious sample (blocked)
 
 ```bash
-npm_config_registry=https://proxy.wn.leyux.de/npm/ npm install @sonatype/policy-demo@2.1.0
+npm_config_registry=$PROXY_URL/npm/ npm install @sonatype/policy-demo@2.1.0
 ```
 
 Expected: install **fails** — Firewall Pro blocks the component before it can be cached.
@@ -47,7 +54,7 @@ npm reports it cannot fetch the package (HTTP `403`).
 Show the raw block on screen (returns the Sonatype Firewall Report JSON):
 
 ```bash
-curl -s https://proxy.wn.leyux.de/npm/@sonatype/policy-demo/-/policy-demo-2.1.0.tgz
+curl -s $PROXY_URL/npm/@sonatype/policy-demo/-/policy-demo-2.1.0.tgz
 # {"status":403,"title":"Sonatype Firewall Report","detail":"Sonatype has identified this
 #  component as potentially malicious and blocked the download. ..."}
 ```

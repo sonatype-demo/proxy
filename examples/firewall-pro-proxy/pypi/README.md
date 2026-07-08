@@ -3,9 +3,16 @@
 Shows Sonatype Firewall Pro blocking a malicious PyPI package while an allowed version
 downloads normally, all through `git-pkgs proxy`.
 
-- **Index (proxy):** `https://proxy.wn.leyux.de/pypi/simple/`  → upstream `https://firewall.sonatype.app/pypi/`
+- **Index (proxy):** `$PROXY_URL/pypi/simple/`  → upstream `https://firewall.sonatype.app/pypi/`
 - **Package:** `python-policy-demo`
 - **Allowed:** `1.0.0`  **Blocked:** `1.1.0`, `1.2.0`, `1.3.0`
+
+Set the proxy URL first (default is the docker-wn deployment; use your own, e.g. a local
+container `http://localhost:8080`):
+
+```bash
+export PROXY_URL=https://proxy.wn.leyux.de     # or: set -a; . ../.env; set +a
+```
 
 `requirements.txt` in this folder pins a normal third-party package (`requests`) for the
 "regular dependency resolves through the proxy" step.
@@ -36,7 +43,7 @@ python -m pip install --upgrade pip
 ## 2. Resolve a regular dependency through the proxy (succeeds)
 
 ```bash
-python -m pip install --index-url https://proxy.wn.leyux.de/pypi/simple/ -r requirements.txt
+python -m pip install --index-url $PROXY_URL/pypi/simple/ -r requirements.txt
 ```
 
 Expected: install succeeds — proves normal packages flow through the proxy.
@@ -45,7 +52,7 @@ Expected: install succeeds — proves normal packages flow through the proxy.
 
 ```bash
 python -m pip download --no-deps --dest /tmp/fwpro-proxy-pypi-download \
-  --index-url https://proxy.wn.leyux.de/pypi/simple/ python-policy-demo==1.0.0
+  --index-url $PROXY_URL/pypi/simple/ python-policy-demo==1.0.0
 ```
 
 Expected: download succeeds. `1.0.0` is the normal, allowed sample.
@@ -54,7 +61,7 @@ Expected: download succeeds. `1.0.0` is the normal, allowed sample.
 
 ```bash
 python -m pip download --no-deps --dest /tmp/fwpro-proxy-pypi-download \
-  --index-url https://proxy.wn.leyux.de/pypi/simple/ python-policy-demo==1.1.0
+  --index-url $PROXY_URL/pypi/simple/ python-policy-demo==1.1.0
 ```
 
 Expected: pip reports `No matching distribution found for python-policy-demo==1.1.0` — the
@@ -63,7 +70,7 @@ malicious version is hidden from the index.
 Show it directly: the simple index lists only `1.0.0` download links:
 
 ```bash
-curl -s https://proxy.wn.leyux.de/pypi/simple/python-policy-demo/ | grep -oE 'href="[^"]+"'
+curl -s $PROXY_URL/pypi/simple/python-policy-demo/ | grep -oE 'href="[^"]+"'
 ```
 
 ## Presenter signal
