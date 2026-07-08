@@ -14,7 +14,7 @@ The proxy upstreams are configured for Sonatype Firewall Pro:
 | --- | --- | --- | --- |
 | npm | `https://proxy.wn.leyux.de/npm/` | `https://firewall.sonatype.app/npm/` | malicious sample blocking works |
 | PyPI | `https://proxy.wn.leyux.de/pypi/simple/` | `https://firewall.sonatype.app/pypi/` | malicious sample blocking works |
-| Maven | `https://proxy.wn.leyux.de/maven/` | `https://firewall.sonatype.app/mvn/` | traffic routes through Firewall Pro; malicious sample blocking not currently observed |
+| Maven | `https://proxy.wn.leyux.de/maven/` | `https://firewall.sonatype.app/mvn/` | malicious sample blocking works — enforced on the **JAR**, not the POM |
 
 Before a live demo, clear or isolate the package-manager cache so local artifacts do not hide whether the proxy/Firewall path is being used.
 
@@ -143,25 +143,48 @@ mkdir -p "$repo"
 
 ### Pull the allowed Sonatype sample through the proxy
 
-```bash
-mvn -q -s settings.xml \
-  -Dmaven.repo.local="$repo" \
-  -Dartifact=org.sonatype:maven-policy-demo:1.0.0:pom \
-  dependency:get
-```
-
-Expected result: Maven exits successfully and writes the POM under `$repo/org/sonatype/maven-policy-demo/1.0.0/`.
-
-### Try the non-normal Sonatype sample through the proxy
+Request the **JAR** (the actual component binary), not just the POM. Firewall Pro
+only quarantines the component artifact; the `.pom` is metadata and is always served,
+so a `:pom` request can never demonstrate a block.
 
 ```bash
 mvn -q -s settings.xml \
   -Dmaven.repo.local="$repo" \
-  -Dartifact=org.sonatype:maven-policy-demo:1.1.0:pom \
+  -Dartifact=org.sonatype:maven-policy-demo:1.0.0:jar \
   dependency:get
 ```
 
-Current verified behavior: Maven traffic is routed through Firewall Pro, but `org.sonatype:maven-policy-demo:1.1.0:pom` still resolves/downloads. Therefore this Maven procedure demonstrates Firewall Pro as the upstream registry/cache path, but it must not be presented as proof that malicious Maven packages are blocked today.
+Expected result: Maven exits successfully (`EXIT=0`) and writes the JAR under `$repo/org/sonatype/maven-policy-demo/1.0.0/`.
+
+### Try the malicious Sonatype sample through the proxy
+
+```bash
+mvn -q -s settings.xml \
+  -Dmaven.repo.local="$repo" \
+  -Dartifact=org.sonatype:maven-policy-demo:1.1.0:jar \
+  dependency:get
+```
+
+Expected result: the build **fails**. Firewall Pro returns `403` on the JAR with a
+`Sonatype Firewall Report` body (`malicious_state=MALICIOUS, ri_state=SUSPICIOUS`). The
+proxy forwards that `403` and the report body to the client, and Maven reports:
+
+```text
+Could not transfer artifact org.sonatype:maven-policy-demo:jar:1.1.0
+from/to firewall-pro-proxy (https://proxy.wn.leyux.de/maven/): status code: 403,
+reason phrase: Forbidden (403)
+```
+
+Presenter tip: `curl -s https://proxy.wn.leyux.de/maven/org/sonatype/maven-policy-demo/1.1.0/maven-policy-demo-1.1.0.jar`
+returns the raw Sonatype Firewall Report JSON, which is a clean thing to show on screen.
+
+Why the earlier `:pom` procedure did not show a block: Firewall Pro quarantines the
+**component JAR**, not the POM. Fetching `...:1.1.0:pom` only pulls metadata, which is
+always served (`200`), so it can never demonstrate blocking. Direct-to-Firewall probes
+confirm this split — for 1.1.0/1.2.0/1.3.0 the `.pom` returns `200` while the `.jar`
+returns `403`; for the allowed 1.0.0 the `.jar` returns `302` (redirect to the real
+download). Always demo Maven blocking with a `:jar` (or a full `dependency:resolve` that
+pulls the binary).
 
 Known Sonatype Maven sample versions:
 
@@ -172,11 +195,18 @@ Known Sonatype Maven sample versions:
 
 ### Optional: use the sample pom.xml
 
-The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and depends on the allowed sample version. The `settings.xml` mirror still forces all plugin/dependency repository access through the proxy:
+The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and
+depends on the allowed sample version as a **JAR** (no `<type>pom</type>`), so
+`dependency:resolve` pulls the component binary through Firewall Pro. The `settings.xml`
+mirror still forces all plugin/dependency repository access through the proxy:
 
 ```bash
 mvn -q -s settings.xml -Dmaven.repo.local="$repo" dependency:resolve
 ```
+
+To show the block from a real build, bump the dependency version in `pom.xml` from
+`1.0.0` to `1.1.0` and re-run `dependency:resolve`: the build fails with the same
+Firewall `403` because Maven now has to fetch the quarantined JAR.
 
 ### Gradle plugin resolution note
 

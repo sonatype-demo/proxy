@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1254,6 +1255,55 @@ func (p *Proxy) serveArtifactError(w http.ResponseWriter, err error, clientMsg s
 	}
 	p.Logger.Error("failed to get artifact", "error", err)
 	http.Error(w, clientMsg, http.StatusBadGateway)
+}
+
+// upstreamStatusRe matches the error the fetch layer produces for an unexpected
+// upstream response: fmt.Errorf("unexpected status %d: %s", code, body).
+var upstreamStatusRe = regexp.MustCompile(`unexpected status (\d+): `)
+
+// UpstreamStatus recovers the HTTP status code and response body an upstream
+// returned, from an error produced by the fetch layer. It returns ok=false when
+// the error does not carry an upstream status (e.g. a transport error). This lets
+// handlers surface a meaningful upstream rejection (such as a Sonatype Firewall
+// 403 block) to the package-manager client instead of a generic 502.
+func UpstreamStatus(err error) (code int, body string, ok bool) {
+	if err == nil {
+		return 0, "", false
+	}
+	msg := err.Error()
+	loc := upstreamStatusRe.FindStringSubmatchIndex(msg)
+	if loc == nil {
+		return 0, "", false
+	}
+	code, convErr := strconv.Atoi(msg[loc[2]:loc[3]])
+	if convErr != nil {
+		return 0, "", false
+	}
+	return code, msg[loc[1]:], true
+}
+
+// serveUpstreamBlock detects an upstream policy block (HTTP 403, e.g. a Sonatype
+// Firewall quarantine) recovered from an artifact-fetch error and, if present,
+// forwards that 403 and the upstream report body to the client. It returns true
+// when it has written the response. Adopting it in every artifact-download
+// handler keeps malicious-package blocking consistent across ecosystems: the
+// client sees the real 403 and reason instead of a generic 502 Bad Gateway.
+func (p *Proxy) serveUpstreamBlock(w http.ResponseWriter, err error) bool {
+	status, body, ok := UpstreamStatus(err)
+	// Sonatype Firewall quarantines a component with 403 (npm/Maven/PyPI) or 409
+	// (NuGet); both carry a human-readable report body.
+	if !ok || (status != http.StatusForbidden && status != http.StatusConflict) {
+		return false
+	}
+	p.Logger.Warn("artifact blocked by upstream policy", "status", status, "detail", body)
+	contentType := "text/plain; charset=utf-8"
+	if strings.HasPrefix(strings.TrimSpace(body), "{") {
+		contentType = contentTypeJSON
+	}
+	w.Header().Set(headerContentType, contentType)
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(body))
+	return true
 }
 
 // errStale304 is returned when upstream sends 304 but the cached file is missing.

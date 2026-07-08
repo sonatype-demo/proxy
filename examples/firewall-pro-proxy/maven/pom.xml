@@ -27,7 +27,6 @@
       <groupId>org.sonatype</groupId>
       <artifactId>maven-policy-demo</artifactId>
       <version>1.0.0</version>
-      <type>pom</type>
     </dependency>
   </dependencies>
 </project>

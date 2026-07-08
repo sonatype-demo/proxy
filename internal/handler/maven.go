@@ -130,6 +130,13 @@ func (h *MavenHandler) handleDownload(w http.ResponseWriter, r *http.Request, ur
 
 	result, err := h.proxy.GetOrFetchArtifactFromURL(r.Context(), "maven", name, version, filename, upstreamURL)
 	if err != nil {
+		// A 403 from the upstream is a policy block (e.g. Sonatype Firewall
+		// quarantining a malicious component). Forward the upstream status and
+		// report body so the Maven client sees why the artifact was refused
+		// instead of an opaque 502 Bad Gateway.
+		if h.proxy.serveUpstreamBlock(w, err) {
+			return
+		}
 		h.proxy.serveArtifactError(w, err, "failed to fetch artifact")
 		return
 	}
