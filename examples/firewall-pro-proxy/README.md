@@ -27,6 +27,10 @@ set -a; . ./.env; set +a     # loads PROXY_URL (+ Firewall creds, needed only by
 export PROXY_URL=https://proxy.wn.leyux.de
 ```
 
+Want to run against your **own** proxy instead of the docker-wn deployment? Spin up a local
+proxy container (Rancher Desktop) — see [`local-proxy/`](local-proxy/README.md) — and set
+`PROXY_URL=http://localhost:8080`.
+
 `.env` holds three values: `PROXY_URL` (non-secret) and the two Firewall Pro basic-auth
 credentials `SONATYPE_FIREWALL_USERNAME` / `SONATYPE_FIREWALL_PASSWORD`. It is gitignored
 and never committed. A committed **`.env.example`** template ships with sample values — copy
@@ -43,6 +47,7 @@ cp .env.example .env      # then edit PROXY_URL and the Firewall creds
 | [`npm/`](npm/README.md)           | npm demo — `@sonatype/policy-demo`                               |
 | [`pypi/`](pypi/README.md)         | PyPI/pip demo — `python-policy-demo`                             |
 | [`maven/`](maven/README.md)       | Maven demo — `org.sonatype:maven-policy-demo` (+ Gradle notes)  |
+| [`local-proxy/`](local-proxy/README.md) | Run your **own** proxy container locally (Rancher Desktop) at `localhost:8080` |
 | `verify-firewall-blocking.sh`     | One-shot check of the whole allowed/blocked matrix (all 3)       |
 
 ## The demo in one line per ecosystem

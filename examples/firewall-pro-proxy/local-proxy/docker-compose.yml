@@ -1,0 +1,35 @@
+# Local git-pkgs proxy fronting Sonatype Firewall Pro, published at http://localhost:8080.
+#
+# Works with Rancher Desktop:
+#   - dockerd (moby) backend  ->  `docker compose ...`
+#   - containerd backend      ->  `nerdctl compose ...`
+#
+# The image is built locally from the repo Dockerfile (multi-stage Go build).
+# Firewall Pro credentials are read from ../.env (gitignored); copy ../.env.example first.
+# See README.md in this folder.
+
+services:
+  proxy:
+    build:
+      context: ../../..        # repo root (contains the Dockerfile and Go sources)
+      dockerfile: Dockerfile
+    image: git-pkgs-proxy:local
+    container_name: git-pkgs-proxy-local
+    restart: unless-stopped
+    command: ["serve", "-config", "/etc/proxy/config.yml"]
+    env_file:
+      - ../.env                # SONATYPE_FIREWALL_USERNAME / SONATYPE_FIREWALL_PASSWORD
+    ports:
+      - "8080:8080"            # Rancher Desktop forwards this to localhost:8080
+    volumes:
+      - ./config.yml:/etc/proxy/config.yml:ro
+      - proxy-data:/data       # SQLite DB + cached artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  proxy-data:

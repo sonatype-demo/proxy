@@ -46,8 +46,9 @@ PROXY_URL=https://proxy.wn.leyux.de
 ```
 
 Set it to your own proxy to run the same demo elsewhere — for example a local proxy
-container: `PROXY_URL=http://localhost:8080`. Every command in this runbook and the
-per-ecosystem READMEs uses `$PROXY_URL`. Load it with `set -a; . ./.env; set +a` from
+container: `PROXY_URL=http://localhost:8080` (spin one up with Rancher Desktop via
+[`examples/firewall-pro-proxy/local-proxy/`](examples/firewall-pro-proxy/local-proxy/README.md)).
+Every command in this runbook and the per-ecosystem READMEs uses `$PROXY_URL`. Load it with `set -a; . ./.env; set +a` from
 `examples/firewall-pro-proxy/` (this also loads the Firewall creds for the verify script),
 or, for the through-proxy demos that need no credentials, just `export PROXY_URL=…`. A
 committed `examples/firewall-pro-proxy/.env.example` shows the expected `.env` contents with

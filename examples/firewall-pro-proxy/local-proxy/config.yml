@@ -1,0 +1,48 @@
+# git-pkgs proxy config for a LOCAL demo container fronting Sonatype Firewall Pro.
+# Served at http://localhost:8080. Used by docker-compose.yml in this folder.
+
+listen: ":8080"
+base_url: "http://localhost:8080"
+ui_base_url: "http://localhost:8080/ui/"
+
+storage:
+  url: "file:///data/artifacts"
+
+database:
+  driver: "sqlite"
+  path: "/data/proxy.db"
+
+log:
+  level: "info"
+  format: "text"
+
+gradle:
+  build_cache:
+    read_only: false
+    max_upload_size: "100MB"
+    max_age: "168h"
+    sweep_interval: "10m"
+
+health:
+  storage_probe_interval: "30s"
+
+# npm, PyPI and Maven are screened by Sonatype Firewall Pro.
+# Credentials come from the environment (docker-compose env_file ../.env) and are
+# never committed. ${VAR} placeholders are expanded by the proxy at startup.
+upstream:
+  npm: "https://firewall.sonatype.app/npm/"
+  pypi: "https://firewall.sonatype.app/pypi/"
+  maven: "https://firewall.sonatype.app/mvn/"
+  auth:
+    "https://firewall.sonatype.app/npm/":
+      type: basic
+      username: "${SONATYPE_FIREWALL_USERNAME}"
+      password: "${SONATYPE_FIREWALL_PASSWORD}"
+    "https://firewall.sonatype.app/pypi/":
+      type: basic
+      username: "${SONATYPE_FIREWALL_USERNAME}"
+      password: "${SONATYPE_FIREWALL_PASSWORD}"
+    "https://firewall.sonatype.app/mvn/":
+      type: basic
+      username: "${SONATYPE_FIREWALL_USERNAME}"
+      password: "${SONATYPE_FIREWALL_PASSWORD}"
