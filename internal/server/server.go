@@ -74,6 +74,7 @@ import (
 	"github.com/git-pkgs/proxy/internal/database"
 	"github.com/git-pkgs/proxy/internal/denylist"
 	"github.com/git-pkgs/proxy/internal/enrichment"
+	"github.com/git-pkgs/proxy/internal/fetchcb"
 	"github.com/git-pkgs/proxy/internal/handler"
 	upstreamhttp "github.com/git-pkgs/proxy/internal/httpclient"
 	"github.com/git-pkgs/proxy/internal/metrics"
@@ -228,9 +229,11 @@ func (s *Server) Start(listeners ...net.Listener) error {
 func (s *Server) serve(listener net.Listener) error {
 	metadataClient, artifactClient := s.newUpstreamClients(s.cfg.ParseArtifactTimeout())
 
-	// Create shared components with circuit breaker.
+	// Create shared components with circuit breaker. The policy-aware wrapper
+	// keeps an upstream 4xx policy block (e.g. a Sonatype Firewall 403) from
+	// tripping the per-host breaker; see internal/fetchcb.
 	baseFetcher := fetch.NewFetcher(fetch.WithHTTPClient(artifactClient), fetch.WithMaxArtifactSize(s.cfg.ParseArtifactMaxSize()))
-	fetcher := fetch.NewCircuitBreakerFetcher(baseFetcher)
+	fetcher := fetchcb.New(baseFetcher)
 	s.breakers = newBreakerMonitor(fetcher, s.logger)
 	resolver := fetch.NewResolver()
 	cd := &cooldown.Config{
