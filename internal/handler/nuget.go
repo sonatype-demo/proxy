@@ -132,21 +132,33 @@ func (h *NuGetHandler) rewriteServiceIndex(body []byte) ([]byte, error) {
 		return body, nil
 	}
 
+	customUpstream := h.upstreamURL != nugetUpstream
+	kept := resources[:0]
 	for _, res := range resources {
 		rmap, ok := res.(map[string]any)
 		if !ok {
+			kept = append(kept, res)
 			continue
 		}
 
 		id, _ := rmap["@id"].(string)
 		rtype, _ := rmap["@type"].(string)
 
+		// A custom upstream such as Sonatype Firewall signs packages itself, so
+		// its repository-signature service would make the client reject the
+		// packages this proxy serves. Drop the resource instead.
+		if customUpstream && strings.HasPrefix(rtype, "RepositorySignatures") {
+			continue
+		}
+
 		// Rewrite URLs for services we proxy. The service type determines the
 		// local route because an upstream index may advertise a different host.
 		if id != "" {
 			rmap["@id"] = h.rewriteNuGetURL(id, rtype)
 		}
+		kept = append(kept, res)
 	}
+	index["resources"] = kept
 
 	return json.Marshal(index)
 }
@@ -154,6 +166,13 @@ func (h *NuGetHandler) rewriteServiceIndex(body []byte) ([]byte, error) {
 // rewriteNuGetURL rewrites a NuGet service URL based on its advertised type.
 // Service types the proxy does not handle are returned unchanged.
 func (h *NuGetHandler) rewriteNuGetURL(origURL, serviceType string) string {
+	// A custom upstream (e.g. Sonatype Firewall) advertises every service under
+	// its own base. Rewrite that base back to this proxy's /nuget/ path first, so
+	// the client keeps talking to us even for a service type we do not map.
+	if h.upstreamURL != nugetUpstream && strings.HasPrefix(origURL, h.upstreamURL+"/") {
+		return h.proxyURL + "/nuget/" + strings.TrimPrefix(origURL, h.upstreamURL+"/")
+	}
+
 	switch serviceType {
 	case "PackageBaseAddress/3.0.0":
 		return h.proxyURL + "/nuget/v3-flatcontainer/"
@@ -253,7 +272,8 @@ func (h *NuGetHandler) proxyUpstream(w http.ResponseWriter, r *http.Request) {
 func (h *NuGetHandler) buildUpstreamURL(r *http.Request) string {
 	path := r.URL.Path
 
-	// Handle query and autocomplete which go to azuresearch
+	// Search/autocomplete live on a separate host for api.nuget.org, but under the
+	// same base for a custom upstream (e.g. Sonatype Firewall).
 	if strings.HasPrefix(path, "/query") || strings.HasPrefix(path, "/autocomplete") {
 		return h.searchURL + path + "?" + r.URL.RawQuery
 	}

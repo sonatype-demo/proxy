@@ -557,6 +557,60 @@ func TestNewNuGetHandlerNoTrailingSlash(t *testing.T) {
 	}
 }
 
+// TestNuGetRewriteServiceIndexCustomUpstream covers a registry manager such as
+// Sonatype Firewall in place of api.nuget.org: every service it advertises under
+// its own base is rewritten to this proxy, and its repository-signature service
+// is dropped so the client does not demand repository-signed packages.
+func TestNuGetRewriteServiceIndexCustomUpstream(t *testing.T) {
+	const firewall = "https://firewall.sonatype.app/nuget"
+	h := &NuGetHandler{
+		proxyURL:    "http://localhost:8080",
+		upstreamURL: firewall,
+	}
+
+	input, _ := json.Marshal(map[string]any{
+		"version": "3.0.0",
+		"resources": []any{
+			map[string]string{"@id": firewall + "/v3-flatcontainer/", "@type": "PackageBaseAddress/3.0.0"},
+			map[string]string{"@id": firewall + "/v3/registration5-gz-semver2/", "@type": "RegistrationsBaseUrl/3.6.0"},
+			map[string]string{"@id": firewall + "/query", "@type": "SearchQueryService"},
+			map[string]string{"@id": firewall + "/v3/repository-signatures/5.0.0.json", "@type": "RepositorySignatures/5.0.0"},
+			map[string]string{"@id": firewall + "/v3/custom/", "@type": "SomethingElse/1.0.0"},
+		},
+	})
+
+	output, err := h.rewriteServiceIndex(input)
+	if err != nil {
+		t.Fatalf("rewriteServiceIndex failed: %v", err)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(output, &result); err != nil {
+		t.Fatalf("failed to parse output: %v", err)
+	}
+
+	got := map[string]bool{}
+	for _, res := range result["resources"].([]any) {
+		rmap := res.(map[string]any)
+		got[rmap["@id"].(string)] = true
+	}
+
+	want := []string{
+		"http://localhost:8080/nuget/v3-flatcontainer/",
+		"http://localhost:8080/nuget/v3/registration5-gz-semver2/",
+		"http://localhost:8080/nuget/query",
+		"http://localhost:8080/nuget/v3/custom/",
+	}
+	for _, id := range want {
+		if !got[id] {
+			t.Errorf("rewritten resources %v do not contain %q", got, id)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("got %d resources %v, want %d (repository signatures dropped)", len(got), got, len(want))
+	}
+}
+
 func TestNuGetRewriteServiceIndexNoResources(t *testing.T) {
 	h := &NuGetHandler{
 		proxyURL: "http://localhost:8080",

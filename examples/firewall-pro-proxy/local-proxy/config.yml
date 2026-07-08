@@ -33,6 +33,7 @@ upstream:
   npm: "https://firewall.sonatype.app/npm/"
   pypi: "https://firewall.sonatype.app/pypi/"
   maven: "https://firewall.sonatype.app/mvn/"
+  nuget: "https://firewall.sonatype.app/nuget/"
   auth:
     "https://firewall.sonatype.app/npm/":
       type: basic
@@ -43,6 +44,10 @@ upstream:
       username: "${SONATYPE_FIREWALL_USERNAME}"
       password: "${SONATYPE_FIREWALL_PASSWORD}"
     "https://firewall.sonatype.app/mvn/":
+      type: basic
+      username: "${SONATYPE_FIREWALL_USERNAME}"
+      password: "${SONATYPE_FIREWALL_PASSWORD}"
+    "https://firewall.sonatype.app/nuget/":
       type: basic
       username: "${SONATYPE_FIREWALL_USERNAME}"
       password: "${SONATYPE_FIREWALL_PASSWORD}"

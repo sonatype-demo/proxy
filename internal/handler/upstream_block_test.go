@@ -46,6 +46,14 @@ func TestServeUpstreamBlock(t *testing.T) {
 			wantCT:      "text/plain; charset=utf-8",
 		},
 		{
+			name:        "nuget 409 conflict block is forwarded verbatim",
+			err:         fmt.Errorf("fetching from upstream: %w", fmt.Errorf("unexpected status 409: %s", "Sonatype blocked this malicious component")),
+			wantHandled: true,
+			wantStatus:  409,
+			wantBody:    "Sonatype blocked this malicious component",
+			wantCT:      "text/plain; charset=utf-8",
+		},
+		{
 			name:        "non-403 upstream status is not a block",
 			err:         fmt.Errorf("fetching from upstream: %w", fmt.Errorf("unexpected status 500: boom")),
 			wantHandled: false,
