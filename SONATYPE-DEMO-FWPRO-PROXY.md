@@ -1,29 +1,140 @@
 # Sonatype Firewall Pro demo with git-pkgs proxy
 
-This runbook collects demo procedures for using Sonatype Repository Firewall Pro with `git-pkgs proxy` as a third-party package registry/cache.
+## What this is
 
-The docker-wn deployment exposes the proxy at:
+[`git-pkgs proxy`](README.md) is a caching proxy for package registries (npm, PyPI,
+Maven, and many more). Upstream, it points each ecosystem at its public registry
+(registry.npmjs.org, PyPI, Maven Central, …).
 
-```text
-https://proxy.wn.leyux.de/
+**This fork repoints the npm, PyPI and Maven upstreams at [Sonatype Repository
+Firewall](https://www.sonatype.com/products/sonatype-repository-firewall) ("Firewall
+Pro") instead.** Firewall Pro evaluates every requested component against Sonatype
+policy and **quarantines malicious or non-compliant versions**. Placing the proxy in
+front of it gives developers a single, ordinary-looking registry URL per ecosystem
+while every download is transparently screened by Firewall Pro.
+
+The demo shows, live, that:
+
+- **known-good** package versions install normally through the proxy, and
+- **known-malicious** sample versions are **blocked** — for all three ecosystems.
+
+```
+  npm / pip / mvn                git-pkgs proxy                 Sonatype Firewall Pro
+  ────────────────>  https://proxy.wn.leyux.de/*  ──────>  https://firewall.sonatype.app/*
+   (plain registry URL,          (caches allowed                (evaluates policy,
+    no auth needed)               artifacts, forwards            quarantines malicious
+                                  policy blocks)                 versions, holds creds)
 ```
 
-The proxy upstreams are configured for Sonatype Firewall Pro:
+## The docker-wn deployment
 
-| Ecosystem | Proxy endpoint | Firewall Pro upstream | Current demo behavior |
-| --- | --- | --- | --- |
-| npm | `https://proxy.wn.leyux.de/npm/` | `https://firewall.sonatype.app/npm/` | malicious sample blocking works |
-| PyPI | `https://proxy.wn.leyux.de/pypi/simple/` | `https://firewall.sonatype.app/pypi/` | malicious sample blocking works |
-| Maven | `https://proxy.wn.leyux.de/maven/` | `https://firewall.sonatype.app/mvn/` | malicious sample blocking works — enforced on the **JAR**, not the POM |
+The proxy runs as a Docker Compose service on `docker-wn` and is published at
+`https://proxy.wn.leyux.de/`. Deployment repo: `/home/cleygraf/git/wn-leyux-org/proxy`
+(see its README). The Firewall Pro basic-auth credentials live only in that repo's
+untracked `.env` and are injected into the container — never commit or print them.
 
-Before a live demo, clear or isolate the package-manager cache so local artifacts do not hide whether the proxy/Firewall path is being used.
+| Ecosystem | Proxy endpoint (what developers use)      | Firewall Pro upstream                  |
+| --------- | ----------------------------------------- | -------------------------------------- |
+| npm       | `https://proxy.wn.leyux.de/npm/`          | `https://firewall.sonatype.app/npm/`   |
+| PyPI      | `https://proxy.wn.leyux.de/pypi/simple/`  | `https://firewall.sonatype.app/pypi/`  |
+| Maven     | `https://proxy.wn.leyux.de/maven/`        | `https://firewall.sonatype.app/mvn/`   |
 
-## Automated verification (direct Firewall Pro)
+## The sample packages
 
-`examples/firewall-pro-proxy/verify-firewall-blocking.sh` checks in one run that
-Firewall Pro blocks the malicious `policy-demo` sample versions and serves the
-allowed ones for all three ecosystems. It talks directly to Firewall Pro (not
-through the proxy), downloads no package bytes, and is safe to run in CI.
+Sonatype publishes `policy-demo` packages whose versions are deliberately flagged so a
+Firewall policy can block them. One version per ecosystem is normal; the rest are
+non-normal/malicious.
+
+| Ecosystem | Package                          | Allowed | Blocked (non-normal)      |
+| --------- | -------------------------------- | ------- | ------------------------- |
+| npm       | `@sonatype/policy-demo`          | `2.0.0` | `2.1.0`, `2.2.0`, `2.3.0` |
+| PyPI      | `python-policy-demo`             | `1.0.0` | `1.1.0`, `1.2.0`, `1.3.0` |
+| Maven     | `org.sonatype:maven-policy-demo` | `1.0.0` | `1.1.0`, `1.2.0`, `1.3.0` |
+
+## How a block appears at the HTTP level
+
+Firewall Pro does not enforce policy the same way in every ecosystem, which matters for
+demoing it correctly:
+
+| Ecosystem | Where the block happens                              | What the client sees                        |
+| --------- | ---------------------------------------------------- | ------------------------------------------- |
+| npm       | The malicious **tarball** returns `403`; the version is also hidden from the packument | `npm install` fails to fetch the tarball    |
+| PyPI      | The malicious version is **omitted from the PEP 503 simple index** (no download link) | pip: `No matching distribution found`       |
+| Maven     | The **JAR** (component binary) returns `403`; the **POM is always served (200)** | `mvn` fails to transfer the artifact        |
+
+The Maven distinction is the easy one to get wrong: the POM is only metadata and is never
+quarantined, so a `:pom` request can never demonstrate a block. **Always demo Maven with
+the `:jar`.**
+
+## What this fork changes, and why
+
+The proxy needed both configuration and source changes to front Firewall Pro correctly.
+
+### 1. Repoint the upstreams at Firewall Pro (enablement)
+
+The stock proxy hard-codes public registries. This fork lets the npm and PyPI upstreams be
+configured and rewrites Firewall's artifact links back through the proxy
+(`ea25a6b`, `73e035c`), and the deployment config sets `upstream.npm/pypi/maven` to the
+Firewall Pro endpoints with basic-auth. Result: every fresh request is screened by
+Firewall Pro rather than the public registry.
+
+### 2. Demo the Maven block on the JAR, not the POM
+
+The original Maven demo fetched `:pom`, which Firewall always serves (`200`), so "blocking
+was not observed." The runbook and sample `pom.xml` now use the **JAR**, which is the
+artifact Firewall actually quarantines. (Root-caused with direct-to-Firewall probes; see
+the Maven README.)
+
+### 3. Forward Firewall's `403` to the client, consistently (`27498bd`, `762ff95`)
+
+When Firewall quarantines a component it returns `403` with a JSON *Sonatype Firewall
+Report* body. The stock proxy mapped that to a generic **`502 Bad Gateway`**, hiding the
+reason. Now the proxy **forwards the `403` and the report body** to the client. A shared
+helper (`serveUpstreamBlock` / `writeArtifactError` in `internal/handler/handler.go`) is
+adopted by **every** ecosystem download handler — so blocking behaves the same whether you
+pull npm, Maven, or any other ecosystem — with npm keeping its JSON error shape and the OCI
+handler emitting a native `403 DENIED`. Maven now reports `status code: 403, reason phrase:
+Forbidden (403)` instead of `502`.
+
+### 4. Don't let policy blocks trip the circuit breaker (`9f396da`)
+
+The proxy's upstream fetcher has a per-host circuit breaker. The stock breaker counts
+**every** non-2xx as a failure — including a `403` policy block — and because one host
+(`firewall.sonatype.app`) fronts all three ecosystems, they share one breaker. Blocking a
+handful of malicious packages in a row would open it after 5 failures and then **healthy,
+allowed packages would start failing with `502`** for the backoff window.
+
+`internal/fetchcb` replaces that with a **policy-aware breaker**: a `4xx` client response (a
+`404`, or any `403` block) is returned to the caller but **does not count as a failure**;
+only genuine unavailability (`5xx`, rate limiting, transport errors) trips the breaker. A
+run of dozens of consecutive blocks no longer disrupts allowed traffic. Same tuning as the
+stock breaker (per-host, threshold 5, 30 s→5 min backoff).
+
+### 5. A one-shot verification script (`0f29f29`)
+
+`examples/firewall-pro-proxy/verify-firewall-blocking.sh` asserts the whole matrix in one
+run. See below.
+
+## Running the demo
+
+Per-ecosystem, hands-on runbooks live next to the example projects:
+
+- **npm** — [`examples/firewall-pro-proxy/npm/README.md`](examples/firewall-pro-proxy/npm/README.md)
+- **PyPI** — [`examples/firewall-pro-proxy/pypi/README.md`](examples/firewall-pro-proxy/pypi/README.md)
+- **Maven** — [`examples/firewall-pro-proxy/maven/README.md`](examples/firewall-pro-proxy/maven/README.md)
+
+Overview and shared setup: [`examples/firewall-pro-proxy/README.md`](examples/firewall-pro-proxy/README.md).
+
+Before a live demo, clear or isolate the package-manager cache (each README shows how) so a
+locally cached artifact can't hide whether the proxy/Firewall path was actually exercised.
+
+## Automated verification
+
+`examples/firewall-pro-proxy/verify-firewall-blocking.sh` checks, in one run, that the
+malicious `policy-demo` versions are blocked and the allowed ones are served, for all three
+ecosystems. It downloads no package bytes and is safe to run in CI.
+
+By default it talks **directly to Firewall Pro** (isolating Firewall/policy from the proxy):
 
 ```bash
 cd examples/firewall-pro-proxy
@@ -31,226 +142,48 @@ set -a; . /home/cleygraf/git/wn-leyux-org/proxy/.env; set +a   # load Firewall c
 ./verify-firewall-blocking.sh
 ```
 
-It reads `SONATYPE_FIREWALL_USERNAME` / `SONATYPE_FIREWALL_PASSWORD` from the
-environment (never printed), exits `0` when every expectation holds and `1` if
-any malicious version is served or any allowed version is blocked. Blocking
-signals checked: npm tarball and Maven JAR return `403`; the PyPI malicious
-versions are absent from the PEP 503 simple index.
-
-## npm demo
-
-Example files live in:
-
-```text
-examples/firewall-pro-proxy/npm/
-```
-
-### Clean local npm state
+Point it **through the proxy** to verify the end-to-end path (this is what exercises the
+`403`-forwarding and breaker changes above):
 
 ```bash
-cd examples/firewall-pro-proxy/npm
-npm cache clean --force
-rm -rf node_modules package-lock.json
+FIREWALL_BASE=https://proxy.wn.leyux.de \
+NPM_UPSTREAM=https://proxy.wn.leyux.de/npm \
+PYPI_UPSTREAM=https://proxy.wn.leyux.de/pypi \
+MAVEN_UPSTREAM=https://proxy.wn.leyux.de/maven \
+./verify-firewall-blocking.sh
 ```
 
-### Pull an allowed package through the proxy
+It reads `SONATYPE_FIREWALL_USERNAME` / `SONATYPE_FIREWALL_PASSWORD` from the environment
+(never printed), exits `0` when every expectation holds and `1` if any malicious version is
+served or any allowed version is blocked.
+
+## Presenter signal — confirm Firewall Pro is really in the path
+
+A mounted config is not proof that Firewall is being used; a cached artifact can serve
+without any upstream call. After a **fresh** (cache-cleared) request, the proxy logs on
+docker-wn should show the Firewall upstream:
 
 ```bash
-npm_config_registry=https://proxy.wn.leyux.de/npm/ npm install @sonatype/policy-demo@2.0.0
+docker logs --since 2m git-pkgs-proxy 2>&1 \
+  | grep -E 'firewall.sonatype.app|registry.npmjs.org|files.pythonhosted.org|repo1.maven.org'
 ```
 
-Expected result: install succeeds. Version `2.0.0` is the normal/allowed Sonatype sample.
+| Ecosystem | Good (Firewall in path)                       | Bad (bypassing Firewall)              |
+| --------- | --------------------------------------------- | ------------------------------------- |
+| npm       | `https://firewall.sonatype.app/npm/`          | `https://registry.npmjs.org/`         |
+| PyPI      | `https://firewall.sonatype.app/pypi/packages/`| `https://files.pythonhosted.org/`     |
+| Maven     | `https://firewall.sonatype.app/mvn/`          | `https://repo1.maven.org/maven2/`     |
 
-### Try a malicious sample through the proxy
+A confirmed block is logged as `artifact blocked by upstream policy` with the Firewall
+report `detail`. If you see a `registry.npmjs.org` / `files.pythonhosted.org` /
+`repo1.maven.org` URL on a fresh cache miss, the route is bypassing Firewall — pause the
+demo.
 
-```bash
-npm_config_registry=https://proxy.wn.leyux.de/npm/ npm install @sonatype/policy-demo@2.1.0
-```
+## Gradle note (not part of the blocking demo)
 
-Expected result: Firewall Pro blocks the request before the package is cached by the third-party registry. Versions `2.1.0`, `2.2.0`, and `2.3.0` are Sonatype sample malicious/non-normal versions; `2.0.0` is allowed.
-
-### Presenter signal
-
-After a fresh request, proxy logs on docker-wn should show npm upstream URLs under:
-
-```text
-https://firewall.sonatype.app/npm/
-```
-
-If logs show `https://registry.npmjs.org/` for a fresh cache miss, the npm route is not using Firewall Pro and the demo should be paused.
-
-
-## PyPI / pip demo
-
-Example files live in:
-
-```text
-examples/firewall-pro-proxy/pypi/
-```
-
-On docker-wn, the host `python3` is Python 3.13 and does not include a usable pip module. Use `uv` to create a Python 3.11 virtual environment with pip seeded into it.
-
-### Clean local pip state
-
-```bash
-cd examples/firewall-pro-proxy/pypi
-rm -rf .venv /tmp/fwpro-proxy-pypi-download
-uv venv --seed --python 3.11 .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-```
-
-### Pull regular dependencies through the proxy
-
-```bash
-python -m pip install --index-url https://proxy.wn.leyux.de/pypi/simple/ -r requirements.txt
-```
-
-Expected result: install succeeds. The sample `requirements.txt` intentionally contains a normal package version.
-
-### Pull the allowed Sonatype sample through the proxy
-
-```bash
-python -m pip download --no-deps --dest /tmp/fwpro-proxy-pypi-download   --index-url https://proxy.wn.leyux.de/pypi/simple/ python-policy-demo==1.0.0
-```
-
-Expected result: download succeeds. Version `1.0.0` is the normal/allowed Sonatype sample.
-
-### Try a malicious sample through the proxy
-
-```bash
-python -m pip download --no-deps --dest /tmp/fwpro-proxy-pypi-download   --index-url https://proxy.wn.leyux.de/pypi/simple/ python-policy-demo==1.1.0
-```
-
-Expected result: Firewall Pro hides/blocks the malicious version. pip should report `No matching distribution found` and show only the allowed version `1.0.0`.
-
-Versions `1.1.0`, `1.2.0`, and `1.3.0` are Sonatype sample non-normal versions; `1.0.0` is normal and allowed.
-
-### Presenter signal
-
-After a fresh request, proxy logs on docker-wn should show PyPI artifact URLs under:
-
-```text
-https://firewall.sonatype.app/pypi/packages/
-```
-
-If logs show `https://files.pythonhosted.org/` for a fresh cache miss, the PyPI route is bypassing Firewall Pro and the demo should be paused.
-
-
-## Maven demo
-
-Example files live in:
-
-```text
-examples/firewall-pro-proxy/maven/pom.xml
-examples/firewall-pro-proxy/maven/settings.xml
-examples/firewall-pro-proxy/maven/settings.gradle.kts
-```
-
-The Maven demo uses an isolated local repository and the checked-in Maven mirror settings file so it does not depend on any user-level Maven settings.
-
-### Clean local Maven state and force Maven through the proxy
-
-Use an isolated local repository plus `examples/firewall-pro-proxy/maven/settings.xml`. The settings file contains `<mirrorOf>*</mirrorOf>` so every Maven repository request is mirrored to `https://proxy.wn.leyux.de/maven/`. This is important: `mvn dependency:get -DremoteRepositories=...` alone can still resolve from Maven Central in some environments, which hides whether Firewall Pro was actually used.
-
-```bash
-cd examples/firewall-pro-proxy/maven
-repo=/tmp/fwpro-proxy-maven-demo/repo
-rm -rf /tmp/fwpro-proxy-maven-demo
-mkdir -p "$repo"
-```
-
-### Pull the allowed Sonatype sample through the proxy
-
-Request the **JAR** (the actual component binary), not just the POM. Firewall Pro
-only quarantines the component artifact; the `.pom` is metadata and is always served,
-so a `:pom` request can never demonstrate a block.
-
-```bash
-mvn -q -s settings.xml \
-  -Dmaven.repo.local="$repo" \
-  -Dartifact=org.sonatype:maven-policy-demo:1.0.0:jar \
-  dependency:get
-```
-
-Expected result: Maven exits successfully (`EXIT=0`) and writes the JAR under `$repo/org/sonatype/maven-policy-demo/1.0.0/`.
-
-### Try the malicious Sonatype sample through the proxy
-
-```bash
-mvn -q -s settings.xml \
-  -Dmaven.repo.local="$repo" \
-  -Dartifact=org.sonatype:maven-policy-demo:1.1.0:jar \
-  dependency:get
-```
-
-Expected result: the build **fails**. Firewall Pro returns `403` on the JAR with a
-`Sonatype Firewall Report` body (`malicious_state=MALICIOUS, ri_state=SUSPICIOUS`). The
-proxy forwards that `403` and the report body to the client, and Maven reports:
-
-```text
-Could not transfer artifact org.sonatype:maven-policy-demo:jar:1.1.0
-from/to firewall-pro-proxy (https://proxy.wn.leyux.de/maven/): status code: 403,
-reason phrase: Forbidden (403)
-```
-
-Presenter tip: `curl -s https://proxy.wn.leyux.de/maven/org/sonatype/maven-policy-demo/1.1.0/maven-policy-demo-1.1.0.jar`
-returns the raw Sonatype Firewall Report JSON, which is a clean thing to show on screen.
-
-Why the earlier `:pom` procedure did not show a block: Firewall Pro quarantines the
-**component JAR**, not the POM. Fetching `...:1.1.0:pom` only pulls metadata, which is
-always served (`200`), so it can never demonstrate blocking. Direct-to-Firewall probes
-confirm this split — for 1.1.0/1.2.0/1.3.0 the `.pom` returns `200` while the `.jar`
-returns `403`; for the allowed 1.0.0 the `.jar` returns `302` (redirect to the real
-download). Always demo Maven blocking with a `:jar` (or a full `dependency:resolve` that
-pulls the binary).
-
-Known Sonatype Maven sample versions:
-
-- `1.0.0` - Normal
-- `1.1.0` - Suspicious; malicious Security Vulnerability Category
-- `1.2.0` - Suspicious
-- `1.3.0` - Pending
-
-### Optional: use the sample pom.xml
-
-The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and
-depends on the allowed sample version as a **JAR** (no `<type>pom</type>`), so
-`dependency:resolve` pulls the component binary through Firewall Pro. The `settings.xml`
-mirror still forces all plugin/dependency repository access through the proxy:
-
-```bash
-mvn -q -s settings.xml -Dmaven.repo.local="$repo" dependency:resolve
-```
-
-To show the block from a real build, bump the dependency version in `pom.xml` from
-`1.0.0` to `1.1.0` and re-run `dependency:resolve`: the build fails with the same
-Firewall `403` because Maven now has to fetch the quarantined JAR.
-
-### Gradle plugin resolution note
-
-The upstream `git-pkgs/proxy` README also documents Gradle plugin resolution through the Maven endpoint. A Gradle build should configure plugin repositories like this:
-
-```kotlin
-pluginManagement {
-  repositories {
-    maven(url = "https://proxy.wn.leyux.de/maven/")
-  }
-}
-```
-
-The example `settings.gradle.kts` in this directory contains that configuration.
-
-Current live state: the proxy source intentionally disables Gradle Plugin Portal fallback for the Firewall Pro demo. With `upstream.maven` set to `https://firewall.sonatype.app/mvn/`, a fresh request for a Gradle plugin marker POM such as `com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:8.4.0` should only try `https://firewall.sonatype.app/mvn/...` and return `404` if Firewall does not serve that marker. Do not present Gradle plugin resolution as part of the Firewall Pro demo.
-
-The README's separate `/gradle/` endpoint is Gradle HTTP Build Cache, not Maven dependency or plugin resolution. It is unrelated to the Firewall Pro package-blocking demo.
-
-### Presenter signal
-
-After a fresh request, proxy logs on docker-wn should show Maven upstream URLs under:
-
-```text
-https://firewall.sonatype.app/mvn/
-```
-
-If logs show `https://repo1.maven.org/maven2/` for a fresh cache miss, the Maven route is bypassing Firewall Pro and the demo should be paused.
+`examples/firewall-pro-proxy/maven/settings.gradle.kts` shows Gradle plugin resolution
+through the Maven endpoint, and the separate `/gradle/` **HTTP Build Cache** endpoint. The
+build cache is unrelated to package blocking. Gradle Plugin Portal fallback is intentionally
+disabled for this demo (`a2d8314`), so Gradle plugin markers only resolve if Firewall serves
+them — do not present Gradle plugin resolution as part of the Firewall Pro blocking demo. See
+the Maven README for detail.
