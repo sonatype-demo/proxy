@@ -30,8 +30,10 @@ The demo shows, live, that:
 
 The proxy runs as a Docker Compose service on `docker-wn` and is published at
 `https://proxy.wn.leyux.de/`. Deployment repo: `/home/cleygraf/git/wn-leyux-org/proxy`
-(see its README). The Firewall Pro basic-auth credentials live only in that repo's
-untracked `.env` and are injected into the container — never commit or print them.
+(see its README). The Firewall Pro basic-auth credentials are injected into the
+container from that repo's untracked `.env`. A gitignored copy of that `.env` also
+lives at `examples/firewall-pro-proxy/.env` so the verification script can be run
+self-contained (see below). Never commit or print these values.
 
 | Ecosystem | Proxy endpoint (what developers use)      | Firewall Pro upstream                  |
 | --------- | ----------------------------------------- | -------------------------------------- |
@@ -138,7 +140,7 @@ By default it talks **directly to Firewall Pro** (isolating Firewall/policy from
 
 ```bash
 cd examples/firewall-pro-proxy
-set -a; . /home/cleygraf/git/wn-leyux-org/proxy/.env; set +a   # load Firewall creds
+set -a; . ./.env; set +a   # load Firewall creds (gitignored local copy in this folder)
 ./verify-firewall-blocking.sh
 ```
 

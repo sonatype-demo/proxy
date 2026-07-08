@@ -32,7 +32,7 @@ allowed sample is served. It downloads no package bytes and is safe to run in CI
 
 ```bash
 # Credentials are only needed to talk DIRECTLY to Firewall Pro (the default target).
-set -a; . /home/cleygraf/git/wn-leyux-org/proxy/.env; set +a   # load Firewall creds
+set -a; . ./.env; set +a   # load Firewall creds (gitignored local copy in this folder)
 ./verify-firewall-blocking.sh                                  # direct to Firewall Pro
 ```
 
@@ -61,6 +61,9 @@ commands. Confirm Firewall is in the path by checking the proxy logs for
 ## Credentials
 
 The demo endpoints on the proxy need **no** authentication — developers just use the
-`https://proxy.wn.leyux.de/*` URLs. Firewall Pro basic-auth credentials are held only by
-the proxy (in the deployment repo's untracked `.env`) and are needed **only** to run the
-verification script in its default "direct to Firewall" mode. Never commit or print them.
+`https://proxy.wn.leyux.de/*` URLs. Firewall Pro basic-auth credentials are needed **only**
+to run the verification script in its default "direct to Firewall" mode. A copy of the
+credentials `.env` lives in this folder as `examples/firewall-pro-proxy/.env`; it is
+gitignored (never committed) and holds the same live Firewall Pro basic-auth token as the
+deployment repo. Source it with `. ./.env` before running the script. Never commit or print
+these values.

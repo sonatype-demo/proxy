@@ -29,7 +29,7 @@
 #   SONATYPE_FIREWALL_PASSWORD
 #
 # Usage:
-#   set -a; . /path/to/.env; set +a      # load the Firewall basic-auth creds
+#   set -a; . ./.env; set +a      # load the Firewall basic-auth creds (gitignored, this folder)
 #   ./verify-firewall-blocking.sh
 #
 # Optional overrides (default to the public Firewall Pro host):
@@ -65,7 +65,7 @@ MVN_MALICIOUS=(1.1.0 1.2.0 1.3.0)
 # --- preflight --------------------------------------------------------------
 if [ -z "${SONATYPE_FIREWALL_USERNAME:-}" ] || [ -z "${SONATYPE_FIREWALL_PASSWORD:-}" ]; then
   echo "error: set SONATYPE_FIREWALL_USERNAME and SONATYPE_FIREWALL_PASSWORD" >&2
-  echo "       e.g.  set -a; . /path/to/.env; set +a" >&2
+  echo "       e.g.  set -a; . ./.env; set +a" >&2
   exit 2
 fi
 command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 2; }
