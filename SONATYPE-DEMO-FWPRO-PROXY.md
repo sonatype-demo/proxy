@@ -126,7 +126,7 @@ Example files live in:
 examples/firewall-pro-proxy/maven/
 ```
 
-The Maven demo uses an isolated local repository and command-line repository override so it does not depend on any user-level Maven settings.
+The Maven demo uses an isolated local repository and a temporary Maven mirror settings file so it does not depend on any user-level Maven settings.
 
 ### Clean local Maven state and force Maven through the proxy
 
@@ -157,15 +157,21 @@ XML
 ### Pull the allowed Sonatype sample through the proxy
 
 ```bash
-mvn -q   -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo   -DremoteRepositories=firewall-pro-proxy::default::https://proxy.wn.leyux.de/maven/   -Dartifact=org.sonatype:maven-policy-demo:1.0.0:pom   dependency:get
+mvn -q -s "$settings" \
+  -Dmaven.repo.local="$repo" \
+  -Dartifact=org.sonatype:maven-policy-demo:1.0.0:pom \
+  dependency:get
 ```
 
-Expected result: Maven exits successfully and writes the POM under `/tmp/fwpro-proxy-maven-repo/org/sonatype/maven-policy-demo/1.0.0/`.
+Expected result: Maven exits successfully and writes the POM under `$repo/org/sonatype/maven-policy-demo/1.0.0/`.
 
 ### Try the non-normal Sonatype sample through the proxy
 
 ```bash
-mvn -q   -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo   -DremoteRepositories=firewall-pro-proxy::default::https://proxy.wn.leyux.de/maven/   -Dartifact=org.sonatype:maven-policy-demo:1.1.0:pom   dependency:get
+mvn -q -s "$settings" \
+  -Dmaven.repo.local="$repo" \
+  -Dartifact=org.sonatype:maven-policy-demo:1.1.0:pom \
+  dependency:get
 ```
 
 Current verified behavior: Maven traffic is routed through Firewall Pro, but `org.sonatype:maven-policy-demo:1.1.0:pom` still resolves/downloads. Therefore this Maven procedure demonstrates Firewall Pro as the upstream registry/cache path, but it must not be presented as proof that malicious Maven packages are blocked today.
