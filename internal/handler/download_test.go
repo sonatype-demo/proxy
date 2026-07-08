@@ -898,104 +898,49 @@ func TestMavenHandler_CacheMiss(t *testing.T) {
 	}
 }
 
-func TestMavenHandler_GradlePluginMarkerFallbackAndCache(t *testing.T) {
-	tests := []struct {
-		name       string
-		markerPath string
-	}{
-		{
-			name:       "Spotless",
-			markerPath: "/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/8.4.0/com.diffplug.spotless.gradle.plugin-8.4.0.pom",
-		},
-		{
-			name:       "BenManes",
-			markerPath: "/com/github/ben-manes/versions/com.github.ben-manes.versions.gradle.plugin/0.54.0/com.github.ben-manes.versions.gradle.plugin-0.54.0.pom",
-		},
+func TestMavenHandler_NoGradlePluginPortalFallback(t *testing.T) {
+	proxy, _, _, fetcher := setupTestProxy(t)
+
+	primaryUpstream := "https://repo1.maven.org/maven2"
+	markerPath := "/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/8.4.0/com.diffplug.spotless.gradle.plugin-8.4.0.pom"
+	primaryURL := primaryUpstream + markerPath
+
+	fetcher.fetchErrByURL = map[string]error{
+		primaryURL: ErrUpstreamNotFound,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			proxy, _, _, fetcher := setupTestProxy(t)
+	h := NewMavenHandler(proxy, "http://localhost", primaryUpstream, "https://plugins.gradle.org/m2")
+	srv := httptest.NewServer(h.Routes())
+	defer srv.Close()
 
-			primaryUpstream := "https://repo1.maven.org/maven2"
-			pluginPortalUpstream := "https://plugins.gradle.org/m2"
-			primaryURL := primaryUpstream + tt.markerPath
+	resp, err := http.Get(srv.URL + markerPath)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	_ = resp.Body.Close()
 
-			fetcher.fetchErrByURL = map[string]error{
-				primaryURL: ErrUpstreamNotFound,
-			}
-			fetcher.artifact = &fetch.Artifact{
-				Body:        io.NopCloser(strings.NewReader("<project/>")),
-				ContentType: "application/xml",
-			}
-
-			h := NewMavenHandler(proxy, "http://localhost", primaryUpstream, pluginPortalUpstream)
-			srv := httptest.NewServer(h.Routes())
-			defer srv.Close()
-
-			resp, err := http.Get(srv.URL + tt.markerPath)
-			if err != nil {
-				t.Fatalf("request failed: %v", err)
-			}
-			body, _ := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-			}
-			if string(body) != "<project/>" {
-				t.Fatalf("body = %q, want %q", body, "<project/>")
-			}
-
-			wantFallbackURL := pluginPortalUpstream + tt.markerPath
-			if fetcher.fetchedURL != wantFallbackURL {
-				t.Fatalf("fallback URL = %q, want %q", fetcher.fetchedURL, wantFallbackURL)
-			}
-
-			fetcher.fetchCalled = false
-			resp, err = http.Get(srv.URL + tt.markerPath)
-			if err != nil {
-				t.Fatalf("second request failed: %v", err)
-			}
-			_ = resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("second status = %d, want %d", resp.StatusCode, http.StatusOK)
-			}
-			if fetcher.fetchCalled {
-				t.Fatal("expected plugin marker POM to be served from cache on second request")
-			}
-		})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+	if fetcher.fetchedURL != primaryURL {
+		t.Fatalf("fetched URL = %q, want primary upstream only %q", fetcher.fetchedURL, primaryURL)
 	}
 }
 
-func TestMavenHandler_GradlePluginMarkerMetadataFallback(t *testing.T) {
-	paths := map[string]string{
-		"/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/maven-metadata.xml":      "<metadata/>",
-		"/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/maven-metadata.xml.sha1": "sha1",
-	}
-
+func TestMavenHandler_MetadataNoGradlePluginPortalFallback(t *testing.T) {
 	primaryHits := map[string]int{}
 	pluginHits := map[string]int{}
+	metadataPath := "/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/maven-metadata.xml"
 
 	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		primaryHits[r.URL.Path]++
-		if _, ok := paths[r.URL.Path]; ok {
-			http.NotFound(w, r)
-			return
-		}
-		t.Fatalf("unexpected path to primary upstream: %s", r.URL.Path)
+		http.NotFound(w, r)
 	}))
 	defer primary.Close()
 
 	pluginPortal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pluginHits[r.URL.Path]++
-		body, ok := paths[r.URL.Path]
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = io.WriteString(w, body)
+		_, _ = io.WriteString(w, "<metadata/>")
 	}))
 	defer pluginPortal.Close()
 
@@ -1006,127 +951,7 @@ func TestMavenHandler_GradlePluginMarkerMetadataFallback(t *testing.T) {
 	srv := httptest.NewServer(h.Routes())
 	defer srv.Close()
 
-	for reqPath, wantBody := range paths {
-		resp, err := http.Get(srv.URL + reqPath)
-		if err != nil {
-			t.Fatalf("GET %s failed: %v", reqPath, err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET %s: status = %d, want %d", reqPath, resp.StatusCode, http.StatusOK)
-		}
-		if string(body) != wantBody {
-			t.Fatalf("GET %s: body = %q, want %q", reqPath, body, wantBody)
-		}
-
-		if primaryHits[reqPath] == 0 {
-			t.Fatalf("GET %s did not hit primary upstream", reqPath)
-		}
-		if pluginHits[reqPath] == 0 {
-			t.Fatalf("GET %s did not hit plugin portal fallback", reqPath)
-		}
-	}
-}
-
-func TestMavenHandler_GradlePluginChecksumFallbackToPluginPortal(t *testing.T) {
-	primaryUpstream := "https://repo1.maven.org/maven2"
-	pluginPortalUpstream := "https://plugins.gradle.org/m2"
-	paths := []string{
-		"/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/8.4.0/com.diffplug.spotless.gradle.plugin-8.4.0.pom.sha1",
-		"/com/diffplug/spotless/com.diffplug.spotless.gradle.plugin/8.4.0/com.diffplug.spotless.gradle.plugin-8.4.0.pom.md5",
-		"/com/diffplug/spotless/spotless-plugin-gradle/8.4.0/spotless-plugin-gradle-8.4.0.jar.sha1",
-		"/com/diffplug/spotless/spotless-plugin-gradle/8.4.0/spotless-plugin-gradle-8.4.0.jar.sha256",
-	}
-
-	for _, reqPath := range paths {
-		proxy, _, _, fetcher := setupTestProxy(t)
-		fetcher.fetchErrByURL = map[string]error{primaryUpstream + reqPath: ErrUpstreamNotFound}
-		fetcher.artifact = &fetch.Artifact{
-			Body:        io.NopCloser(strings.NewReader("checksum")),
-			ContentType: "text/plain",
-		}
-
-		h := NewMavenHandler(proxy, "http://localhost", primaryUpstream, pluginPortalUpstream)
-		srv := httptest.NewServer(h.Routes())
-
-		resp, err := http.Get(srv.URL + reqPath)
-		if err != nil {
-			t.Fatalf("GET %s failed: %v", reqPath, err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		srv.Close()
-
-		if resp.StatusCode != http.StatusOK || string(body) != "checksum" {
-			t.Fatalf("GET %s: status %d body %q", reqPath, resp.StatusCode, body)
-		}
-		if want := pluginPortalUpstream + reqPath; fetcher.fetchedURL != want {
-			t.Fatalf("GET %s: fetched URL = %q, want %q", reqPath, fetcher.fetchedURL, want)
-		}
-	}
-}
-
-func TestMavenHandler_GradlePluginImplementation_FallbackToPluginPortal(t *testing.T) {
-	proxy, _, _, fetcher := setupTestProxy(t)
-
-	primaryUpstream := "https://repo1.maven.org/maven2"
-	pluginPortalUpstream := "https://plugins.gradle.org/m2"
-	implPath := "/com/diffplug/spotless/spotless-plugin-gradle/8.4.0/spotless-plugin-gradle-8.4.0.jar"
-	primaryURL := primaryUpstream + implPath
-	pluginPortalURL := pluginPortalUpstream + implPath
-
-	fetcher.fetchErrByURL = map[string]error{
-		primaryURL: ErrUpstreamNotFound,
-	}
-	fetcher.artifact = &fetch.Artifact{
-		Body:        io.NopCloser(strings.NewReader("plugin impl jar")),
-		ContentType: "application/java-archive",
-	}
-
-	h := NewMavenHandler(proxy, "http://localhost", primaryUpstream, pluginPortalUpstream)
-	srv := httptest.NewServer(h.Routes())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + implPath)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	if string(body) != "plugin impl jar" {
-		t.Fatalf("body = %q, want %q", body, "plugin impl jar")
-	}
-
-	if fetcher.fetchedURL != pluginPortalURL {
-		t.Fatalf("implementation artifact should fallback to plugin portal; fetched URL = %q, want %q", fetcher.fetchedURL, pluginPortalURL)
-	}
-}
-
-func TestMavenHandler_GradlePluginImplementation_NotFoundInBothUpstreams(t *testing.T) {
-	proxy, _, _, fetcher := setupTestProxy(t)
-
-	primaryUpstream := "https://repo1.maven.org/maven2"
-	pluginPortalUpstream := "https://plugins.gradle.org/m2"
-	implPath := "/com/diffplug/spotless/spotless-plugin-gradle/8.4.0/spotless-plugin-gradle-8.4.0.jar"
-	primaryURL := primaryUpstream + implPath
-	pluginPortalURL := pluginPortalUpstream + implPath
-
-	fetcher.fetchErrByURL = map[string]error{
-		primaryURL:      ErrUpstreamNotFound,
-		pluginPortalURL: ErrUpstreamNotFound,
-	}
-
-	h := NewMavenHandler(proxy, "http://localhost", primaryUpstream, pluginPortalUpstream)
-	srv := httptest.NewServer(h.Routes())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + implPath)
+	resp, err := http.Get(srv.URL + metadataPath)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -1135,9 +960,11 @@ func TestMavenHandler_GradlePluginImplementation_NotFoundInBothUpstreams(t *test
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
-
-	if fetcher.fetchedURL != pluginPortalURL {
-		t.Fatalf("expected fallback attempt to plugin portal; fetched URL = %q, want %q", fetcher.fetchedURL, pluginPortalURL)
+	if primaryHits[metadataPath] == 0 {
+		t.Fatalf("metadata request did not hit primary upstream")
+	}
+	if pluginHits[metadataPath] != 0 {
+		t.Fatalf("metadata request unexpectedly hit Gradle Plugin Portal fallback")
 	}
 }
 

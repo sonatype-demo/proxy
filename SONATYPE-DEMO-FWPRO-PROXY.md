@@ -181,7 +181,7 @@ pluginManagement {
 
 The example `settings.gradle.kts` in this directory contains that configuration.
 
-Current live check: this Gradle plugin-resolution path is not a working Firewall Pro demo yet. With `upstream.maven` set to `https://firewall.sonatype.app/mvn/`, a fresh request for a Gradle plugin marker POM such as `com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:8.4.0` returned `502` through the proxy. Logs showed the proxy tried `https://firewall.sonatype.app/mvn/...`; the direct Firewall response for that marker is `404`, while `https://plugins.gradle.org/m2/...` serves the marker. Do not present Gradle plugin resolution as verified until the Maven handler fallback/auth behavior is fixed or the Gradle Plugin Portal path is intentionally configured and tested.
+Current live check: this Gradle plugin-resolution path is intentionally disabled for the Firewall Pro demo. With `upstream.maven` set to `https://firewall.sonatype.app/mvn/`, a fresh request for a Gradle plugin marker POM such as `com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:8.4.0` should only try `https://firewall.sonatype.app/mvn/...` and return `404` if Firewall does not serve that marker. Do not present Gradle plugin resolution as part of the Firewall Pro demo.
 
 The README's separate `/gradle/` endpoint is Gradle HTTP Build Cache, not Maven dependency or plugin resolution. It is unrelated to the Firewall Pro package-blocking demo.
 

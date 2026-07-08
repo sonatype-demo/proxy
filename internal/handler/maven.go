@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	mavenCentralUpstream       = "https://repo1.maven.org/maven2"
-	gradlePluginPortalUpstream = "https://plugins.gradle.org/m2"
-	minMavenParts              = 4 // group path segments + artifact + version + filename
+	mavenCentralUpstream = "https://repo1.maven.org/maven2"
+	minMavenParts        = 4 // group path segments + artifact + version + filename
 )
 
 // Maven files are stored under pkg:maven/{group}/{artifact}, built from the
@@ -37,26 +36,21 @@ func mavenRetentionKey(p *purl.PURL) (string, bool) {
 
 // MavenHandler handles Maven repository protocol requests.
 type MavenHandler struct {
-	proxy                   *Proxy
-	upstreamURL             string
-	pluginPortalUpstreamURL string
-	proxyURL                string
+	proxy       *Proxy
+	upstreamURL string
+	proxyURL    string
 }
 
 // NewMavenHandler creates a new Maven repository handler.
-func NewMavenHandler(proxy *Proxy, proxyURL, upstreamURL, pluginPortalUpstreamURL string) *MavenHandler {
+func NewMavenHandler(proxy *Proxy, proxyURL, upstreamURL, _ string) *MavenHandler {
 	if strings.TrimSpace(upstreamURL) == "" {
 		upstreamURL = mavenCentralUpstream
 	}
-	if strings.TrimSpace(pluginPortalUpstreamURL) == "" {
-		pluginPortalUpstreamURL = gradlePluginPortalUpstream
-	}
 
 	return &MavenHandler{
-		proxy:                   proxy,
-		upstreamURL:             strings.TrimSuffix(upstreamURL, "/"),
-		pluginPortalUpstreamURL: strings.TrimSuffix(pluginPortalUpstreamURL, "/"),
-		proxyURL:                strings.TrimSuffix(proxyURL, "/"),
+		proxy:       proxy,
+		upstreamURL: strings.TrimSuffix(upstreamURL, "/"),
+		proxyURL:    strings.TrimSuffix(proxyURL, "/"),
 	}
 }
 
@@ -102,14 +96,6 @@ func (h *MavenHandler) handleMetadata(w http.ResponseWriter, r *http.Request, ur
 	body, contentType, err := h.proxy.FetchOrCacheMetadata(r.Context(), "maven", cacheKey, upstreamURL, "*/*")
 	if err != nil {
 		if errors.Is(err, ErrUpstreamNotFound) {
-			pluginPortalURL := fmt.Sprintf("%s/%s", h.pluginPortalUpstreamURL, urlPath)
-			h.proxy.Logger.Info("maven metadata unavailable in primary upstream, trying Gradle Plugin Portal",
-				"path", urlPath)
-			body, contentType, err = h.proxy.FetchOrCacheMetadata(r.Context(), "maven", cacheKey, pluginPortalURL, "*/*")
-		}
-	}
-	if err != nil {
-		if errors.Is(err, ErrUpstreamNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
@@ -143,14 +129,6 @@ func (h *MavenHandler) handleDownload(w http.ResponseWriter, r *http.Request, ur
 	upstreamURL := fmt.Sprintf("%s/%s", h.upstreamURL, urlPath)
 
 	result, err := h.proxy.GetOrFetchArtifactFromURL(r.Context(), "maven", name, version, filename, upstreamURL)
-	if err != nil {
-		if errors.Is(err, ErrUpstreamNotFound) {
-			pluginPortalURL := fmt.Sprintf("%s/%s", h.pluginPortalUpstreamURL, urlPath)
-			h.proxy.Logger.Info("maven artifact not found in primary upstream, trying Gradle Plugin Portal",
-				"group", group, "artifact", artifact, "version", version, "filename", filename)
-			result, err = h.proxy.GetOrFetchArtifactFromURL(r.Context(), "maven", name, version, filename, pluginPortalURL)
-		}
-	}
 	if err != nil {
 		h.proxy.serveArtifactError(w, err, "failed to fetch artifact")
 		return

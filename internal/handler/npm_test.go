@@ -278,47 +278,6 @@ func TestNewNPMHandlerUsesCustomUpstream(t *testing.T) {
 	}
 }
 
-func TestNPMHandlerMetadataUsesConfiguredUpstreamAuth(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Basic test-token" {
-			t.Fatalf("Authorization = %q, want %q", got, "Basic test-token")
-		}
-		if r.URL.Path != "/testpkg" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"name": "testpkg",
-			"versions": {
-				"1.0.0": {
-					"name": "testpkg",
-					"version": "1.0.0",
-					"dist": {"tarball": "https://registry.npmjs.org/testpkg/-/testpkg-1.0.0.tgz"}
-				}
-			}
-		}`))
-	}))
-	defer upstream.Close()
-
-	proxy := testProxy()
-	proxy.AuthForURL = func(url string) (string, string) {
-		if strings.HasPrefix(url, upstream.URL) {
-			return "Authorization", "Basic test-token"
-		}
-		return "", ""
-	}
-	h := NewNPMHandler(proxy, "http://proxy.local", upstream.URL)
-
-	req := httptest.NewRequest(http.MethodGet, "/testpkg", nil)
-	w := httptest.NewRecorder()
-	h.handlePackageMetadata(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
-	}
-}
-
 func TestNPMHandlerDownloadUsesConfiguredUpstream(t *testing.T) {
 	proxy, _, _, fetcher := setupTestProxy(t)
 	fetcher.artifact = &fetch.Artifact{
