@@ -2,7 +2,7 @@
 
 > **Modified fork — Sonatype Firewall Pro demo.** This is a fork of
 > [git-pkgs/proxy](https://github.com/git-pkgs/proxy) adapted to front **Sonatype Repository
-> Firewall Pro** and demonstrate malicious-package blocking for npm, PyPI and Maven. Start here:
+> Firewall Pro** and demonstrate malicious-package blocking for npm, PyPI, Maven and NuGet. Start here:
 >
 > - **[SONATYPE-DEMO-FWPRO-PROXY.md](SONATYPE-DEMO-FWPRO-PROXY.md)** — purpose, architecture,
 >   what this fork changed and why, and how to run the demo.

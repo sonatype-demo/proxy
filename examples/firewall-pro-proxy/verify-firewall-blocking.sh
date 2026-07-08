@@ -3,7 +3,7 @@
 # verify-firewall-blocking.sh
 #
 # Verifies Sonatype Repository Firewall Pro policy behaviour for the Sonatype
-# "policy-demo" sample packages across npm, PyPI and Maven:
+# "policy-demo" sample packages across npm, PyPI, Maven and NuGet:
 #
 #   * known-malicious versions are BLOCKED, and
 #   * known-good versions are NOT blocked.

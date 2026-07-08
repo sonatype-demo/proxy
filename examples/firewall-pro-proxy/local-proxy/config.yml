@@ -26,7 +26,7 @@ gradle:
 health:
   storage_probe_interval: "30s"
 
-# npm, PyPI and Maven are screened by Sonatype Firewall Pro.
+# npm, PyPI, Maven and NuGet are screened by Sonatype Firewall Pro.
 # Credentials come from the environment (docker-compose env_file ../.env) and are
 # never committed. ${VAR} placeholders are expanded by the proxy at startup.
 upstream:

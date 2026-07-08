@@ -165,7 +165,7 @@ locally cached artifact can't hide whether the proxy/Firewall path was actually 
 ## Automated verification
 
 `examples/firewall-pro-proxy/verify-firewall-blocking.sh` checks, in one run, that the
-malicious `policy-demo` versions are blocked and the allowed ones are served, for all three
+malicious `policy-demo` versions are blocked and the allowed ones are served, for all four
 ecosystems. It downloads no package bytes and is safe to run in CI.
 
 By default it talks **directly to Firewall Pro** (isolating Firewall/policy from the proxy):
