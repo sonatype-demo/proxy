@@ -128,12 +128,30 @@ examples/firewall-pro-proxy/maven/
 
 The Maven demo uses an isolated local repository and command-line repository override so it does not depend on any user-level Maven settings.
 
-### Clean local Maven state
+### Clean local Maven state and force Maven through the proxy
+
+Use an isolated local repository and a temporary `settings.xml` mirror. The mirror is important: `mvn dependency:get -DremoteRepositories=...` can still resolve from Maven Central in some environments, which hides whether Firewall Pro was actually used.
 
 ```bash
 cd examples/firewall-pro-proxy/maven
-rm -rf /tmp/fwpro-proxy-maven-repo
-mkdir -p /tmp/fwpro-proxy-maven-repo
+work=/tmp/fwpro-proxy-maven-demo
+repo="$work/repo"
+settings="$work/settings.xml"
+rm -rf "$work"
+mkdir -p "$repo"
+cat > "$settings" <<'XML'
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>firewall-pro-proxy</id>
+      <mirrorOf>*</mirrorOf>
+      <url>https://proxy.wn.leyux.de/maven/</url>
+    </mirror>
+  </mirrors>
+</settings>
+XML
 ```
 
 ### Pull the allowed Sonatype sample through the proxy
@@ -164,7 +182,7 @@ Known Sonatype Maven sample versions:
 The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and depends on the allowed sample version:
 
 ```bash
-mvn -q -Dmaven.repo.local=/tmp/fwpro-proxy-maven-repo dependency:resolve
+mvn -q -s "$settings" -Dmaven.repo.local="$repo" dependency:resolve
 ```
 
 ### Gradle plugin resolution note
@@ -181,7 +199,7 @@ pluginManagement {
 
 The example `settings.gradle.kts` in this directory contains that configuration.
 
-Current live check: this Gradle plugin-resolution path is intentionally disabled for the Firewall Pro demo. With `upstream.maven` set to `https://firewall.sonatype.app/mvn/`, a fresh request for a Gradle plugin marker POM such as `com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:8.4.0` should only try `https://firewall.sonatype.app/mvn/...` and return `404` if Firewall does not serve that marker. Do not present Gradle plugin resolution as part of the Firewall Pro demo.
+Current live state: the proxy source intentionally disables Gradle Plugin Portal fallback for the Firewall Pro demo. With `upstream.maven` set to `https://firewall.sonatype.app/mvn/`, a fresh request for a Gradle plugin marker POM such as `com.diffplug.spotless:com.diffplug.spotless.gradle.plugin:8.4.0` should only try `https://firewall.sonatype.app/mvn/...` and return `404` if Firewall does not serve that marker. Do not present Gradle plugin resolution as part of the Firewall Pro demo.
 
 The README's separate `/gradle/` endpoint is Gradle HTTP Build Cache, not Maven dependency or plugin resolution. It is unrelated to the Firewall Pro package-blocking demo.
 
