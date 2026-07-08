@@ -445,6 +445,13 @@ func (h *ContainerHandler) handleBlobDownload(w http.ResponseWriter, r *http.Req
 		if writeUpstreamHeld(w, err) {
 			return
 		}
+		// An upstream policy block (a Sonatype Firewall 403) is a valid answer
+		// from a healthy upstream; report it as DENIED rather than a 502.
+		if status, _, ok := UpstreamStatus(err); ok && status == http.StatusForbidden {
+			h.proxy.Logger.Warn("blob blocked by upstream policy", "name", name, "digest", digest)
+			h.containerError(w, http.StatusForbidden, "DENIED", "blocked by upstream policy")
+			return
+		}
 		h.proxy.Logger.Error("failed to fetch blob", "error", err)
 		h.containerError(w, http.StatusBadGateway, "INTERNAL_ERROR", "failed to fetch blob")
 		return

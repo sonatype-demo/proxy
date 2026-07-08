@@ -863,6 +863,9 @@ func (h *NPMHandler) handleDownload(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrArtifactBlocked), errors.Is(err, ErrVersionDenied):
 			JSONError(w, http.StatusForbidden, err.Error())
 		default:
+			if h.proxy.serveUpstreamBlock(w, err) {
+				return
+			}
 			if writeUpstreamHeld(w, err) {
 				return
 			}

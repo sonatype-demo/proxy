@@ -1253,6 +1253,12 @@ func (p *Proxy) serveArtifactError(w http.ResponseWriter, err error, clientMsg s
 	if writeUpstreamHeld(w, err) {
 		return
 	}
+	// An upstream policy block (a Sonatype Firewall 403, or a NuGet 409) is a
+	// valid answer from a healthy upstream: forward it with its report body so
+	// the client sees why the artifact was refused instead of a 502.
+	if p.serveUpstreamBlock(w, err) {
+		return
+	}
 	p.Logger.Error("failed to get artifact", "error", err)
 	http.Error(w, clientMsg, http.StatusBadGateway)
 }

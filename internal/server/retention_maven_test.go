@@ -21,8 +21,10 @@ const (
 	mavenGuavaJar = "/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar"
 	mavenGuavaPom = "/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.pom"
 	mavenLang3Jar = "/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar"
-	// mavenPluginJar exists only on the plugin portal, so it is fetched
-	// through the handler's fallback.
+	// mavenPluginJar is a Gradle plugin marker artifact. The fork serves it
+	// from the configured Maven upstream alone: the handler has no Gradle
+	// Plugin Portal fallback, so a proxy pointed at one repository cannot
+	// silently reach another.
 	mavenPluginJar = "/com/example/plugin/example-plugin/1.0/example-plugin-1.0.jar"
 )
 
@@ -45,8 +47,8 @@ func mavenRetentionUpstreams(t *testing.T) (central, portal *httptest.Server, do
 		t.Cleanup(srv.Close)
 		return srv
 	}
-	central = serve(mavenGuavaJar, mavenGuavaPom, mavenLang3Jar)
-	portal = serve(mavenPluginJar)
+	central = serve(mavenGuavaJar, mavenGuavaPom, mavenLang3Jar, mavenPluginJar)
+	portal = serve()
 	return central, portal, downloads
 }
 
@@ -168,8 +170,7 @@ func TestMavenRetentionRefusesUnmatchableKeys(t *testing.T) {
 }
 
 // A package rule written as a Maven PURL reaches the stored package, and a
-// file fetched through the Gradle Plugin Portal fallback falls under the
-// maven rule like one from Maven Central.
+// Gradle plugin artifact falls under the maven rule like any other file.
 func TestMavenRetentionPackageRuleAndPluginPortal(t *testing.T) {
 	central, portal, _ := mavenRetentionUpstreams(t)
 	srv, db := newMavenRetentionProxy(t, central, portal)
@@ -206,6 +207,6 @@ func TestMavenRetentionPackageRuleAndPluginPortal(t *testing.T) {
 		t.Error("commons-lang3 kept past the maven rule")
 	}
 	if mavenArtifact(t, db, "example-plugin-1.0.jar").StoragePath.Valid {
-		t.Error("plugin portal artifact kept past the maven rule")
+		t.Error("gradle plugin artifact kept past the maven rule")
 	}
 }
