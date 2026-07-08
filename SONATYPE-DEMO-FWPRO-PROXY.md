@@ -18,6 +18,25 @@ The proxy upstreams are configured for Sonatype Firewall Pro:
 
 Before a live demo, clear or isolate the package-manager cache so local artifacts do not hide whether the proxy/Firewall path is being used.
 
+## Automated verification (direct Firewall Pro)
+
+`examples/firewall-pro-proxy/verify-firewall-blocking.sh` checks in one run that
+Firewall Pro blocks the malicious `policy-demo` sample versions and serves the
+allowed ones for all three ecosystems. It talks directly to Firewall Pro (not
+through the proxy), downloads no package bytes, and is safe to run in CI.
+
+```bash
+cd examples/firewall-pro-proxy
+set -a; . /home/cleygraf/git/wn-leyux-org/proxy/.env; set +a   # load Firewall creds
+./verify-firewall-blocking.sh
+```
+
+It reads `SONATYPE_FIREWALL_USERNAME` / `SONATYPE_FIREWALL_PASSWORD` from the
+environment (never printed), exits `0` when every expectation holds and `1` if
+any malicious version is served or any allowed version is blocked. Blocking
+signals checked: npm tarball and Maven JAR return `403`; the PyPI malicious
+versions are absent from the PEP 503 simple index.
+
 ## npm demo
 
 Example files live in:
