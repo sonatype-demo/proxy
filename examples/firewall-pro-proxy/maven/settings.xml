@@ -5,7 +5,7 @@
     <mirror>
       <id>firewall-pro-proxy</id>
       <mirrorOf>*</mirrorOf>
-      <url>https://proxy.wn.leyux.de/maven/</url>
+      <url>${env.PROXY_URL}/maven/</url>
     </mirror>
   </mirrors>
 </settings>

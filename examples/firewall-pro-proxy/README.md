@@ -29,7 +29,12 @@ export PROXY_URL=https://proxy.wn.leyux.de
 
 `.env` holds three values: `PROXY_URL` (non-secret) and the two Firewall Pro basic-auth
 credentials `SONATYPE_FIREWALL_USERNAME` / `SONATYPE_FIREWALL_PASSWORD`. It is gitignored
-and never committed.
+and never committed. A committed **`.env.example`** template ships with sample values — copy
+it and fill in your own:
+
+```bash
+cp .env.example .env      # then edit PROXY_URL and the Firewall creds
+```
 
 ## Layout
 

@@ -12,7 +12,7 @@
   <repositories>
     <repository>
       <id>firewall-pro-proxy</id>
-      <url>https://proxy.wn.leyux.de/maven/</url>
+      <url>${env.PROXY_URL}/maven/</url>
       <releases>
         <enabled>true</enabled>
       </releases>

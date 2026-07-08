@@ -14,8 +14,9 @@ container `http://localhost:8080`):
 export PROXY_URL=https://proxy.wn.leyux.de     # or: set -a; . ../.env; set +a
 ```
 
-The checked-in `package.json` has `install:allowed` / `install:blocked` scripts that target
-the default docker-wn proxy; the raw commands below honor `$PROXY_URL`.
+The checked-in `package.json` `install:allowed` / `install:blocked` scripts use
+`$PROXY_URL/npm/`, so `npm run install:allowed` works once `PROXY_URL` is exported (same as
+the raw commands below).
 
 ## How the block works
 
@@ -48,10 +49,11 @@ Expected: install succeeds. `2.0.0` is the normal, allowed sample.
 npm_config_registry=$PROXY_URL/npm/ npm install @sonatype/policy-demo@2.1.0
 ```
 
-Expected: install **fails** — Firewall Pro blocks the component before it can be cached.
-npm reports it cannot fetch the package (HTTP `403`).
-
-Show the raw block on screen (returns the Sonatype Firewall Report JSON):
+Expected: install **fails**. Because Firewall Pro hides the malicious versions from the
+packument, npm can't resolve `2.1.0` and reports `No matching version found for
+@sonatype/policy-demo@2.1.0` (code `ETARGET`). The malicious **tarball** itself also returns
+`403` if requested directly — show the raw block on screen (returns the Sonatype Firewall
+Report JSON):
 
 ```bash
 curl -s $PROXY_URL/npm/@sonatype/policy-demo/-/policy-demo-2.1.0.tgz

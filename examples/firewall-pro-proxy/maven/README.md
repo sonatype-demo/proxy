@@ -11,8 +11,8 @@ Sample version labels: `1.0.0` Normal · `1.1.0` Suspicious (malicious security-
 category) · `1.2.0` Suspicious · `1.3.0` Pending.
 
 Set the proxy URL first (default is the docker-wn deployment; use your own, e.g. a local
-container `http://localhost:8080`). Step 1 derives a mirror `settings.xml` from it, so the
-commands work against any proxy:
+container `http://localhost:8080`). The checked-in `settings.xml` reads it via
+`${env.PROXY_URL}`, so `PROXY_URL` **must be set** in the environment before running `mvn`:
 
 ```bash
 export PROXY_URL=https://proxy.wn.leyux.de     # or: set -a; . ../.env; set +a
@@ -22,7 +22,7 @@ export PROXY_URL=https://proxy.wn.leyux.de     # or: set -a; . ../.env; set +a
 
 | File                  | Purpose                                                                    |
 | --------------------- | -------------------------------------------------------------------------- |
-| `settings.xml`        | Maven mirror (`<mirrorOf>*</mirrorOf>`) forcing **all** resolution through the proxy (targets the docker-wn default; step 1 derives a `$PROXY_URL` variant) |
+| `settings.xml`        | Maven mirror (`<mirrorOf>*</mirrorOf>`) forcing **all** resolution through the proxy; its URL is `${env.PROXY_URL}/maven/` |
 | `pom.xml`             | Minimal project depending on the allowed sample **JAR**                    |
 | `settings.gradle.kts` | Gradle plugin-repo + HTTP build-cache config (see "Gradle note" below)     |
 
@@ -50,21 +50,16 @@ which would hide whether Firewall Pro was used at all.
 
 ```bash
 cd examples/firewall-pro-proxy/maven
-export PROXY_URL=${PROXY_URL:-https://proxy.wn.leyux.de}   # or your own proxy
+export PROXY_URL=https://proxy.wn.leyux.de   # or your own proxy (settings.xml reads $PROXY_URL)
 repo=/tmp/fwpro-proxy-maven-demo/repo
 rm -rf /tmp/fwpro-proxy-maven-demo
 mkdir -p "$repo"
-
-# Derive a mirror settings.xml pointed at $PROXY_URL from the checked-in one
-# (a no-op when PROXY_URL is the docker-wn default).
-settings=/tmp/fwpro-proxy-maven-demo/settings.xml
-sed "s#https://proxy.wn.leyux.de/maven/#$PROXY_URL/maven/#" settings.xml > "$settings"
 ```
 
 ## 2. Pull the allowed sample JAR (succeeds)
 
 ```bash
-mvn -q -s "$settings" \
+mvn -q -s settings.xml \
   -Dmaven.repo.local="$repo" \
   -Dartifact=org.sonatype:maven-policy-demo:1.0.0:jar \
   dependency:get
@@ -75,7 +70,7 @@ Expected: exits `0` and writes the JAR under `$repo/org/sonatype/maven-policy-de
 ## 3. Try the malicious sample JAR (blocked)
 
 ```bash
-mvn -q -s "$settings" \
+mvn -q -s settings.xml \
   -Dmaven.repo.local="$repo" \
   -Dartifact=org.sonatype:maven-policy-demo:1.1.0:jar \
   dependency:get
@@ -106,7 +101,7 @@ curl -s $PROXY_URL/maven/org/sonatype/maven-policy-demo/1.1.0/maven-policy-demo-
 `dependency:resolve` pulls the component binary through Firewall Pro:
 
 ```bash
-mvn -q -s "$settings" -Dmaven.repo.local="$repo" dependency:resolve
+mvn -q -s settings.xml -Dmaven.repo.local="$repo" dependency:resolve
 ```
 
 To show the block from a real build, bump the dependency version in `pom.xml` from `1.0.0` to
@@ -128,8 +123,8 @@ bypassing Firewall Pro — pause the demo.
 
 `settings.gradle.kts` documents two Gradle items from the upstream `git-pkgs/proxy` README:
 
-1. **Plugin resolution** through the Maven endpoint (`pluginManagement { repositories {
-   maven(url = "https://proxy.wn.leyux.de/maven/") } }`). Gradle Plugin Portal fallback is
+1. **Plugin resolution** through the Maven endpoint — its repository URL is read from
+   `System.getenv("PROXY_URL")` (falling back to `http://localhost:8080`). Gradle Plugin Portal fallback is
    intentionally disabled in this fork for the Firewall demo, so a plugin marker resolves
    only if Firewall serves it (else `404`). Do not present Gradle plugin resolution as part of
    the blocking demo.

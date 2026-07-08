@@ -49,7 +49,14 @@ Set it to your own proxy to run the same demo elsewhere — for example a local 
 container: `PROXY_URL=http://localhost:8080`. Every command in this runbook and the
 per-ecosystem READMEs uses `$PROXY_URL`. Load it with `set -a; . ./.env; set +a` from
 `examples/firewall-pro-proxy/` (this also loads the Firewall creds for the verify script),
-or, for the through-proxy demos that need no credentials, just `export PROXY_URL=…`.
+or, for the through-proxy demos that need no credentials, just `export PROXY_URL=…`. A
+committed `examples/firewall-pro-proxy/.env.example` shows the expected `.env` contents with
+sample values — `cp .env.example .env` and edit.
+
+The example projects consume `PROXY_URL` directly: the npm `package.json` scripts use
+`$PROXY_URL`, and the Maven `settings.xml` / `pom.xml` / `settings.gradle.kts` read it via
+`${env.PROXY_URL}` (Gradle via `System.getenv`). So `PROXY_URL` must be set in the
+environment before running those.
 
 | Ecosystem | Proxy endpoint (what developers use) | Firewall Pro upstream                  |
 | --------- | ------------------------------------ | -------------------------------------- |
