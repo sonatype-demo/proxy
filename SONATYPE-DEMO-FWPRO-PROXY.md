@@ -123,41 +123,28 @@ If logs show `https://files.pythonhosted.org/` for a fresh cache miss, the PyPI 
 Example files live in:
 
 ```text
-examples/firewall-pro-proxy/maven/
+examples/firewall-pro-proxy/maven/pom.xml
+examples/firewall-pro-proxy/maven/settings.xml
+examples/firewall-pro-proxy/maven/settings.gradle.kts
 ```
 
-The Maven demo uses an isolated local repository and a temporary Maven mirror settings file so it does not depend on any user-level Maven settings.
+The Maven demo uses an isolated local repository and the checked-in Maven mirror settings file so it does not depend on any user-level Maven settings.
 
 ### Clean local Maven state and force Maven through the proxy
 
-Use an isolated local repository and a temporary `settings.xml` mirror. The mirror is important: `mvn dependency:get -DremoteRepositories=...` can still resolve from Maven Central in some environments, which hides whether Firewall Pro was actually used.
+Use an isolated local repository plus `examples/firewall-pro-proxy/maven/settings.xml`. The settings file contains `<mirrorOf>*</mirrorOf>` so every Maven repository request is mirrored to `https://proxy.wn.leyux.de/maven/`. This is important: `mvn dependency:get -DremoteRepositories=...` alone can still resolve from Maven Central in some environments, which hides whether Firewall Pro was actually used.
 
 ```bash
 cd examples/firewall-pro-proxy/maven
-work=/tmp/fwpro-proxy-maven-demo
-repo="$work/repo"
-settings="$work/settings.xml"
-rm -rf "$work"
+repo=/tmp/fwpro-proxy-maven-demo/repo
+rm -rf /tmp/fwpro-proxy-maven-demo
 mkdir -p "$repo"
-cat > "$settings" <<'XML'
-<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
-  <mirrors>
-    <mirror>
-      <id>firewall-pro-proxy</id>
-      <mirrorOf>*</mirrorOf>
-      <url>https://proxy.wn.leyux.de/maven/</url>
-    </mirror>
-  </mirrors>
-</settings>
-XML
 ```
 
 ### Pull the allowed Sonatype sample through the proxy
 
 ```bash
-mvn -q -s "$settings" \
+mvn -q -s settings.xml \
   -Dmaven.repo.local="$repo" \
   -Dartifact=org.sonatype:maven-policy-demo:1.0.0:pom \
   dependency:get
@@ -168,7 +155,7 @@ Expected result: Maven exits successfully and writes the POM under `$repo/org/so
 ### Try the non-normal Sonatype sample through the proxy
 
 ```bash
-mvn -q -s "$settings" \
+mvn -q -s settings.xml \
   -Dmaven.repo.local="$repo" \
   -Dartifact=org.sonatype:maven-policy-demo:1.1.0:pom \
   dependency:get
@@ -185,10 +172,10 @@ Known Sonatype Maven sample versions:
 
 ### Optional: use the sample pom.xml
 
-The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and depends on the allowed sample version:
+The included `pom.xml` declares `https://proxy.wn.leyux.de/maven/` as its repository and depends on the allowed sample version. The `settings.xml` mirror still forces all plugin/dependency repository access through the proxy:
 
 ```bash
-mvn -q -s "$settings" -Dmaven.repo.local="$repo" dependency:resolve
+mvn -q -s settings.xml -Dmaven.repo.local="$repo" dependency:resolve
 ```
 
 ### Gradle plugin resolution note
