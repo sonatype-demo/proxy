@@ -50,6 +50,17 @@ PYPI_UPSTREAM="${PYPI_UPSTREAM:-$FIREWALL_BASE/pypi}"
 MAVEN_UPSTREAM="${MAVEN_UPSTREAM:-$FIREWALL_BASE/mvn}"
 NUGET_UPSTREAM="${NUGET_UPSTREAM:-$FIREWALL_BASE/nuget}"
 
+DIRECT_FIREWALL_BASE="https://firewall.sonatype.app"
+if [ "${FIREWALL_BASE%/}" = "$DIRECT_FIREWALL_BASE" ] \
+  && [ "${NPM_UPSTREAM%/}" = "$DIRECT_FIREWALL_BASE/npm" ] \
+  && [ "${PYPI_UPSTREAM%/}" = "$DIRECT_FIREWALL_BASE/pypi" ] \
+  && [ "${MAVEN_UPSTREAM%/}" = "$DIRECT_FIREWALL_BASE/mvn" ] \
+  && [ "${NUGET_UPSTREAM%/}" = "$DIRECT_FIREWALL_BASE/nuget" ]; then
+  CONNECTION_MODE="direct"
+else
+  CONNECTION_MODE="non-direct"
+fi
+
 # --- Sonatype policy-demo sample coordinates --------------------------------
 NPM_PKG="@sonatype/policy-demo"
 NPM_ALLOWED=(2.0.0)
@@ -116,8 +127,21 @@ check_artifact() { # $1=label $2=url $3=expected(allowed|blocked)
   fi
 }
 
-echo "Sonatype Firewall Pro direct blocking verification"
-echo "Firewall base: $FIREWALL_BASE"
+echo "Sonatype Firewall Pro blocking verification"
+if [ "$CONNECTION_MODE" = direct ]; then
+  echo "Connection mode: DIRECT to $DIRECT_FIREWALL_BASE"
+else
+  echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  echo "!! NON-DIRECT MODE: not talking directly to"
+  echo "!! $DIRECT_FIREWALL_BASE"
+  echo "!! Requests are using proxy or overridden ecosystem endpoints."
+  echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+  echo "Effective endpoints:"
+  echo "  npm:    $NPM_UPSTREAM"
+  echo "  PyPI:   $PYPI_UPSTREAM"
+  echo "  Maven:  $MAVEN_UPSTREAM"
+  echo "  NuGet:  $NUGET_UPSTREAM"
+fi
 echo
 
 echo "== npm  $NPM_PKG  ($NPM_UPSTREAM) =="
