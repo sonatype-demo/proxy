@@ -27,6 +27,17 @@ set -a; . ./.env; set +a     # loads PROXY_URL (+ Firewall creds, needed only by
 export PROXY_URL=https://proxy.wn.leyux.de
 ```
 
+To point the verification script at that proxy, load `.env_proxy` after `.env`. It derives
+and exports all four `*_UPSTREAM` variables through the surrounding `set -a`:
+
+```bash
+set -a
+. ./.env
+. ./.env_proxy
+set +a
+./verify-firewall-blocking.sh
+```
+
 Want to run against your **own** proxy instead of the docker-wn deployment? Spin up a local
 proxy container (Rancher Desktop) — see [`local-proxy/`](local-proxy/README.md) — and set
 `PROXY_URL=http://localhost:8080`.
