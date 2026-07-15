@@ -60,7 +60,7 @@ directory. The resulting project path should end in `nuget/demo/demo.csproj`; a 
 `nuget/demo/demo/demo.csproj` means the setup was started one directory too deep.
 
 ```bash
-cd /home/cleygraf/git/proxy/examples/firewall-pro-proxy/nuget
+cd ./examples/firewall-pro-proxy/nuget
 rm -rf demo
 dotnet new classlib --framework net10.0 --name demo --output demo
 cp nuget.config demo/nuget.config
