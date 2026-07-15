@@ -32,6 +32,13 @@ cd examples/firewall-pro-proxy/nuget
 export PROXY_URL=https://proxy.wn.leyux.de     # or your own proxy, e.g. http://localhost:8080
 ```
 
+The included local Compose proxy serves **plain HTTP**, so use
+`PROXY_URL=http://localhost:8080`, not `https://localhost:8080`. Using HTTPS against that
+HTTP listener produces TLS errors such as `Cannot determine the frame size or a corrupted
+frame was received`. The checked-in `nuget.config` sets `allowInsecureConnections="true"`
+for this source because current NuGet clients otherwise reject HTTP registries. HTTPS proxy
+URLs continue to use normal certificate validation.
+
 ## 2. Create a scratch project and restore the allowed package (succeeds)
 
 ```bash

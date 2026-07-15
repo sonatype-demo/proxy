@@ -68,6 +68,10 @@ docker compose logs -f proxy               # startup / request logs
 `PROXY_URL` already points at it (from `.env`), so just follow the ecosystem runbooks or the
 one-shot verifier:
 
+The local listener is plain HTTP. Keep `PROXY_URL=http://localhost:8080`; do not change it
+to `https://localhost:8080`. The NuGet example explicitly permits this local HTTP source via
+`allowInsecureConnections="true"` in its checked-in `nuget.config`.
+
 ```bash
 cd ..                                       # examples/firewall-pro-proxy/
 set -a; . ./.env; set +a                    # loads PROXY_URL + Firewall creds
