@@ -71,13 +71,15 @@ cp .env.example .env      # then edit PROXY_URL and the Firewall creds
 | Maven     | `org.sonatype:maven-policy-demo:1.0.0:jar` | `org.sonatype:maven-policy-demo:1.1.0:jar` |
 | NuGet     | `Sonatype.sonatype-policy-demo.Package` 1.0.0 | `Sonatype.sonatype-policy-demo.Package` 1.1.0 |
 
+The NuGet package targets `net10.0`, so its real restore demo requires .NET SDK 10. The
+automated HTTP-status verifier does not require a .NET SDK.
+
 ## Automated verification (all four at once)
 
 `verify-firewall-blocking.sh` asserts that every malicious sample is blocked and every
 allowed sample is served. It downloads no package bytes and is safe to run in CI.
 
 ```bash
-# Credentials are only needed to talk DIRECTLY to Firewall Pro (the default target).
 set -a; . ./.env; set +a   # loads Firewall creds + PROXY_URL (gitignored local copy)
 ./verify-firewall-blocking.sh                                  # direct to Firewall Pro
 ```
@@ -86,12 +88,10 @@ Run it **through the proxy** to verify the end-to-end path developers actually u
 upstreams are derived from `$PROXY_URL`, so it works against any proxy):
 
 ```bash
-set -a; . ./.env; set +a   # loads Firewall creds + PROXY_URL
-FIREWALL_BASE=$PROXY_URL \
-NPM_UPSTREAM=$PROXY_URL/npm \
-PYPI_UPSTREAM=$PROXY_URL/pypi \
-MAVEN_UPSTREAM=$PROXY_URL/maven \
-NUGET_UPSTREAM=$PROXY_URL/nuget \
+set -a
+. ./.env
+. ./.env_proxy
+set +a
 ./verify-firewall-blocking.sh
 ```
 
@@ -109,10 +109,11 @@ commands. Confirm Firewall is in the path by checking the proxy logs for
 
 ## Credentials
 
-The demo endpoints on the proxy need **no** authentication — developers just use the
-`$PROXY_URL/*` URLs. Firewall Pro basic-auth credentials are needed **only** to run the
-verification script in its default "direct to Firewall" mode. The `.env` in this folder
-(`examples/firewall-pro-proxy/.env`) holds `PROXY_URL` plus a copy of the Firewall Pro
-credentials; it is gitignored (never committed) and holds the same live basic-auth token as
-the deployment repo. Source it with `. ./.env` before running the script. Never commit or
-print the credential values.
+The package-manager demo endpoints on the proxy need **no** authentication — developers just
+use the `$PROXY_URL/*` URLs. The current verification script, however, requires the Firewall
+Pro basic-auth credentials in both direct and through-proxy mode and sends them to its
+effective endpoints. Run through-proxy verification only against a proxy you trust and
+control. The `.env` in this folder (`examples/firewall-pro-proxy/.env`) holds `PROXY_URL` plus
+a copy of the Firewall Pro credentials; it is gitignored (never committed) and holds the same
+live basic-auth token as the deployment repo. Source it before running the script. Never
+commit or print the credential values.

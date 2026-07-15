@@ -3,6 +3,10 @@
 Shows Sonatype Firewall Pro blocking a malicious NuGet package while an allowed version
 restores normally, all through `git-pkgs proxy`.
 
+> [!IMPORTANT]
+> **.NET SDK 10 is required for this demo.** The sample package supports only `net10.0`;
+> .NET SDK 9 creates a `net9.0` project and the allowed package restore ends with `NU1202`.
+
 - **Source (proxy):** `$PROXY_URL/nuget/v3/index.json`  → upstream `https://firewall.sonatype.app/nuget/`
 - **Package:** `Sonatype.sonatype-policy-demo.Package`
 - **Allowed:** `1.0.0`  **Blocked:** `1.1.0`, `1.2.0`, `1.3.0`
@@ -18,12 +22,22 @@ the download"* message. The proxy forwards that `409` to the client, so `dotnet`
 restore fails on the blocked version. (npm/Maven use `403`; NuGet uses `409` — the proxy
 forwards both.)
 
-## Requirements
+## Requirement: .NET SDK 10
 
-A .NET SDK. The sample package targets **net10.0**, so use **.NET SDK 10** for a clean
-restore of the allowed version (on older SDKs the allowed `.nupkg` still downloads through
-the proxy, but the build reports a target-framework mismatch — the blocking behaviour is
-identical either way).
+This requirement is mandatory for the real `dotnet restore` scenario. Confirm that SDK 10
+is installed and active before creating the project:
+
+```bash
+dotnet --version
+dotnet --list-sdks
+```
+
+The active version must start with `10.`. With SDK 9, the allowed `.nupkg` still downloads
+successfully through the proxy, but NuGet then fails the project compatibility check with
+`NU1202` because a `net9.0` project cannot consume a package that supports only `net10.0`.
+That is a local SDK/framework failure, not a proxy or Firewall failure. If SDK 10 is not
+available, use the top-level `verify-firewall-blocking.sh` HTTP-status verification instead
+of presenting the real restore scenario.
 
 ## 1. Set the proxy URL
 
@@ -41,15 +55,31 @@ URLs continue to use normal certificate validation.
 
 ## 2. Create a scratch project and restore the allowed package (succeeds)
 
+Run these commands from `examples/firewall-pro-proxy/nuget`, not from an existing `demo`
+directory. The resulting project path should end in `nuget/demo/demo.csproj`; a path such as
+`nuget/demo/demo/demo.csproj` means the setup was started one directory too deep.
+
 ```bash
-rm -rf demo && dotnet new classlib -n demo -o demo
+cd /home/cleygraf/git/proxy/examples/firewall-pro-proxy/nuget
+rm -rf demo
+dotnet new classlib --framework net10.0 --name demo --output demo
 cp nuget.config demo/nuget.config
 cd demo
 dotnet add package Sonatype.sonatype-policy-demo.Package --version 1.0.0
 ```
 
 Expected: restore succeeds — `Installed Sonatype.sonatype-policy-demo.Package 1.0.0 from
-$PROXY_URL/nuget/v3/index.json …`.
+`$PROXY_URL/nuget/v3/index.json …`.
+
+How to read the output:
+
+- `GET ...1.0.0.nupkg`, `OK`, and `Installed ... 1.0.0` prove that transport through the
+  proxy worked.
+- A later `NU1202` means the project used the wrong target framework/SDK; use SDK 10 and
+  recreate the project with `--framework net10.0`.
+- `NU1900` for `$PROXY_URL/nuget/v3/vulnerabilities/index.json` is currently a non-fatal
+  audit warning: the demo proxy does not expose that optional NuGet vulnerability resource.
+  It is unrelated to package routing and Firewall policy blocking.
 
 ## 3. Restore the malicious package (blocked)
 

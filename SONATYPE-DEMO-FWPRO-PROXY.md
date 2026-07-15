@@ -19,8 +19,8 @@ The demo shows, live, that:
 - **known-malicious** sample versions are **blocked** — for all four ecosystems.
 
 ```
-  npm / pip / mvn                git-pkgs proxy                 Sonatype Firewall Pro
-  ────────────────>       $PROXY_URL/*         ──────>  https://firewall.sonatype.app/*
+  npm / pip / mvn / dotnet       git-pkgs proxy                 Sonatype Firewall Pro
+  ────────────────────────> $PROXY_URL/*       ──────>  https://firewall.sonatype.app/*
    (plain registry URL,          (caches allowed                (evaluates policy,
     no auth needed)               artifacts, forwards            quarantines malicious
                                   policy blocks)                 versions, holds creds)
@@ -46,11 +46,13 @@ PROXY_URL=https://proxy.wn.leyux.de
 ```
 
 Set it to your own proxy to run the same demo elsewhere — for example a local proxy
-container: `PROXY_URL=http://localhost:8080` (spin one up with Rancher Desktop via
-[`examples/firewall-pro-proxy/local-proxy/`](examples/firewall-pro-proxy/local-proxy/README.md)).
-Every command in this runbook and the per-ecosystem READMEs uses `$PROXY_URL`. Load it with `set -a; . ./.env; set +a` from
-`examples/firewall-pro-proxy/` (this also loads the Firewall creds for the verify script),
-or, for the through-proxy demos that need no credentials, just `export PROXY_URL=…`. A
+container reached from the Docker host as `PROXY_URL=http://localhost:8080`. Spin one up
+with Rancher Desktop via
+[`examples/firewall-pro-proxy/local-proxy/`](examples/firewall-pro-proxy/local-proxy/README.md).
+Every command in this runbook and the per-ecosystem READMEs uses `$PROXY_URL`. Load it with
+`set -a; . ./.env; set +a` from `examples/firewall-pro-proxy/` (this also loads the Firewall
+creds for the verify script), or, for the through-proxy demos that need no credentials, just
+`export PROXY_URL=…`. A
 committed `examples/firewall-pro-proxy/.env.example` shows the expected `.env` contents with
 sample values — `cp .env.example .env` and edit.
 
@@ -159,6 +161,9 @@ Per-ecosystem, hands-on runbooks live next to the example projects:
 
 Overview and shared setup: [`examples/firewall-pro-proxy/README.md`](examples/firewall-pro-proxy/README.md).
 
+The NuGet sample package targets `net10.0`; its real `dotnet restore` scenario requires .NET
+SDK 10. The HTTP-status verifier can still check NuGet allow/block behavior without that SDK.
+
 Before a live demo, clear or isolate the package-manager cache (each README shows how) so a
 locally cached artifact can't hide whether the proxy/Firewall path was actually exercised.
 
@@ -177,22 +182,23 @@ set -a; . ./.env; set +a   # loads Firewall creds + PROXY_URL (gitignored local 
 ```
 
 Point it **through the proxy** to verify the end-to-end path (this is what exercises the
-`403`-forwarding and breaker changes above). The upstreams are derived from `$PROXY_URL`, so
-this works against any proxy — the docker-wn default or your own `http://localhost:8080`:
+`403`/`409` forwarding and breaker changes above). `.env_proxy` derives the ecosystem
+endpoints from `$PROXY_URL`, so this works against the docker-wn deployment or your own
+local proxy:
 
 ```bash
-set -a; . ./.env; set +a   # loads Firewall creds + PROXY_URL
-FIREWALL_BASE=$PROXY_URL \
-NPM_UPSTREAM=$PROXY_URL/npm \
-PYPI_UPSTREAM=$PROXY_URL/pypi \
-MAVEN_UPSTREAM=$PROXY_URL/maven \
-NUGET_UPSTREAM=$PROXY_URL/nuget \
+set -a
+. ./.env
+. ./.env_proxy
+set +a
 ./verify-firewall-blocking.sh
 ```
 
 It reads `SONATYPE_FIREWALL_USERNAME` / `SONATYPE_FIREWALL_PASSWORD` from the environment
 (never printed), exits `0` when every expectation holds and `1` if any malicious version is
-served or any allowed version is blocked.
+served or any allowed version is blocked. The current verifier requires and sends those
+credentials in both direct and through-proxy mode, so point it only at a proxy you trust and
+control.
 
 ## Presenter signal — confirm Firewall Pro is really in the path
 

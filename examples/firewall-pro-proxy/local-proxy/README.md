@@ -74,11 +74,31 @@ to `https://localhost:8080`. The NuGet example explicitly permits this local HTT
 
 ```bash
 cd ..                                       # examples/firewall-pro-proxy/
-set -a; . ./.env; set +a                    # loads PROXY_URL + Firewall creds
-NPM_UPSTREAM=$PROXY_URL/npm PYPI_UPSTREAM=$PROXY_URL/pypi \
-MAVEN_UPSTREAM=$PROXY_URL/maven NUGET_UPSTREAM=$PROXY_URL/nuget FIREWALL_BASE=$PROXY_URL \
-./verify-firewall-blocking.sh               # expect 12 passed, 0 failed
+set -a
+. ./.env
+. ./.env_proxy
+set +a
+./verify-firewall-blocking.sh               # expect 16 passed, 0 failed
 ```
+
+`localhost` means the machine or container where the package-manager command runs. If the
+client runs inside another container, `localhost:8080` points back to that client container,
+not to the Docker host. For example, inside docker-wn's `code-server` container, port 8080 is
+code-server itself. Source `.env` first, then override its host-side URL before deriving the
+ecosystem endpoints:
+
+```bash
+cd ..                                       # examples/firewall-pro-proxy/
+set -a; . ./.env; set +a
+HOST_GATEWAY=$(ip route | awk '/default/ {print $3; exit}')
+export PROXY_URL="http://$HOST_GATEWAY:8080"
+set -a; . ./.env_proxy; set +a
+curl "$PROXY_URL/health"
+./verify-firewall-blocking.sh
+```
+
+On the docker-wn network used during verification this gateway was `172.20.0.1`, but derive
+it instead of hard-coding it because Docker networks can change.
 
 or a quick manual check:
 
